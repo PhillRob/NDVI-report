@@ -1,16 +1,25 @@
-/RUH/ndvi-report-mailer.log
-/RUH/NDVI-auto-processing/ndvi-report-mailer.log
+# RUH
 /RUH/credentials/
-/DQ/NDVI-auto-processing/__pycache__/
-/KKRS/NDVI-auto-processing/__pycache__/
+/RUH/output/
+/RUH/NDVI-auto-processing/__pycache__/
+/RUH/ndvi-report-mailer.log
+
+
+# DQ
 /DQ/output/
+/DQ/credentials/
+/DQ/NDVI-auto-processing/__pycache__/
+/DQ/ndvi-report-mailer.log
+
+## KKRS
+/KKRS/output/
+/KKRS/credentials/
+/KKRS/NDVI-auto-processing/__pycache__/
+/KKRS/ndvi-report-mailer.log
+
+# general
 /ndvi-mailer/
 ee-phill-9248b486a4bc.json
-/DQ/credentials/
-/DQ/.idea/
-/RUH/output/
-/KKRS/credentials/
-
 /Gilbert-21.pem
+gh_token.json
 
-/DQ/NDVI-auto-processing/ndvi-report-mailer.log
