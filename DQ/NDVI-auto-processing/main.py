@@ -28,7 +28,7 @@ if len(sys.argv) >= 2:
 if len(sys.argv) >= 3:
     email_test_run = int(sys.argv[2])
 
-logging.basicConfig(filename='DQ/DQ-ndvi-report-mailer.log', level=logging.DEBUG)
+logging.basicConfig(filename='DQ/ndvi-report-mailer.log', level=logging.DEBUG)
 
 if local_test_run:
     GEOJSON_PATH = 'Diplomatic Quarter.geojson'
@@ -67,7 +67,7 @@ geometry_feature = ee.FeatureCollection(geo_data)
 with open(REPORT_HTML, 'r') as html_text:
     source_html = html_text.read()
 
-logo = Path('static/bpla_logo_blau.png').resolve()
+logo = Path('bpla-systems.png').resolve()
 
 soup = bs4.BeautifulSoup(source_html, features="html5lib")
 html_logo = soup.new_tag('img', src=logo, id="header_content")

@@ -58,7 +58,7 @@ def sendEmail(test, project_data, credentials_path, path_to_pdf):
     )
     msgAlternative.attach(msgText)
     # This example assumes the image is in the current directory
-    fp = open(Path('DQ/bpla-systems.png').resolve(), 'rb')
+    fp = open(Path('bpla-systems.png').resolve(), 'rb')
     msgImage = MIMEImage(fp.read())
     fp.close()
 
