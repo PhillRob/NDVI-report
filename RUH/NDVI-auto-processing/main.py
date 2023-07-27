@@ -198,7 +198,7 @@ def maskS2clouds(image):
 def add_NDVI(image):
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
     # areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
-    areaPixel = ndvi.multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area_m2')
+    areaPixel = ee.Image.pixelArea().rename('area_m2')
     ndvi = ndvi.addBands(areaPixel)
     # ndvi02 = ndvi.gte(0.2)
     thres = ndvi.gte(0.2).rename('thres')
