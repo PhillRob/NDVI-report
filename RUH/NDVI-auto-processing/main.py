@@ -200,6 +200,7 @@ def add_NDVI(image):
     # areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
     areaPixel = ee.Image.pixelArea()#.rename('area_m2')
 
+
     # ndvi02 = ndvi.gte(0.2)
     thres = ndvi.gte(0.2).rename('thres')
     ndvi = ndvi.addBands(areaPixel)
