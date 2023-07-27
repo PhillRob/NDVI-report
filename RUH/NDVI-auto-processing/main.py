@@ -199,9 +199,10 @@ def add_NDVI(image):
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
     # areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
     areaPixel = ee.Image.pixelArea()#.rename('area_m2')
-    ndvi = ndvi.addBands(areaPixel)
+
     # ndvi02 = ndvi.gte(0.2)
     thres = ndvi.gte(0.2).rename('thres')
+    ndvi = ndvi.addBands(areaPixel)
     ndviImg = image.addBands(ndvi).updateMask(thres)
 
     maskedPixelCount = ndviImg.select('areaPixel').reduceRegion(
