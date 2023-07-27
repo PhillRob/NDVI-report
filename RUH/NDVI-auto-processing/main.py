@@ -31,7 +31,7 @@ if len(sys.argv) >= 3:
 logging.basicConfig(filename='RUH/ndvi-report-mailer.log', level=logging.DEBUG)
 
 if local_test_run:
-    GEOJSON_PATH = 'Diplomatic Quarter.geojson'
+    GEOJSON_PATH = 'RUH.geojson'
     JSON_FILE_NAME = '..output/data.json'
     SCREENSHOT_SAVE_NAME = f'../output/growth_decline_'
     CREDENTIALS_PATH = '../credentials/credentials.json'
@@ -56,7 +56,7 @@ else:
     PDF_PATH = f'RUH/output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
 
 
-#ee.Authenticate(quiet=True)
+# Authenticate
 service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
 credentials = ee.ServiceAccountCredentials(service_account, 'ee-phill-9248b486a4bc.json')
 ee.Initialize(credentials)
@@ -144,120 +144,147 @@ def maskS2clouds(image):
     image = image.updateMask(mask)
     return image
 
-def get_project_area(image):
-    # made some changes here, pls check
-    date = image.get('system:time_start')
-    name = image.get('name')
+# def get_project_area(image):
+#     # made some changes here, pls check
+#     date = image.get('system:time_start')
+#     name = image.get('name')
+#
+#     # calculate from polygon
+#     # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+#     # project_stats = area.reduceRegion(
+#     #     reducer=ee.Reducer.sum(),
+#     #     geometry=geometry_feature,
+#     #     scale=10,
+#     #     maxPixels=1e29
+#     # )
+#     project_area_size = {'area': ee.Number(ee.FeatureCollection(geo_data).first().geometry().area()).getInfo()}
+#
+#     return ee.Feature(None, {
+#         'project_area_size': project_area_size,
+#         'name': name,
+#         'system:time_start': date
+#         }
+#     )
 
-    # calculate from polygon
-    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
-    project_stats = area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    project_area_size = {'area': ee.Number(ee.FeatureCollection(geo_data).first().geometry().area()).getInfo()}
-    #project_area_size = ee.Number(project_stats.get('B1')).multiply(100)
-
-    return ee.Feature(None, {
-        'project_area_size': project_area_size,
-        'name': name,
-        'system:time_start': date
-        }
-    )
-
-def get_project_size(image):
-    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
-    project_stats = area.reduceRegion(
-        reducer = ee.Reducer.sum(),
-        geometry = geometry_feature,
-        scale = 10,
-        maxPixels = 1e29
-    )
-    project_stats = {'area': project_stats.get('area')}
-    image = image.set(project_stats)
-    return image
+# def get_project_size(image):
+#
+#     # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+#     project_stats = image.unmask().select('B4').reduceRegion(
+#         reducer=ee.Reducer.count(),
+#         geometry=geometry_feature,
+#         scale=10,
+#         maxPixels=1e59
+#     ).get('B4')
+#
+#     # project_stats = {'area': project_stats.get('area')}
+#     image = image.set({'area': project_stats.get('area')})
+#     return image
 
 
-def get_cloud_stats(image):
-    noncloud_area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('noncloud_area')
-    cloud_stats = noncloud_area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    image = image.set({'noncloud_area': cloud_stats.get('noncloud_area')})
-    image = image.set({'cloudArea': image.getNumber('area').subtract(image.getNumber('noncloud_area'))})
-    image = image.set({'RelCloudArea': image.getNumber('cloudArea').divide(image.getNumber('area')).multiply(100)})
-    return image
+# def get_cloud_stats(image):
+#     noncloud_area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('noncloud_area')
+#     cloud_stats = noncloud_area.reduceRegion(
+#         reducer=ee.Reducer.sum(),
+#         geometry=geometry_feature,
+#         scale=10,
+#         maxPixels=1e29
+#     )
+#     image = image.set({'noncloud_area': cloud_stats.get('noncloud_area')})
+#     image = image.set({'cloudArea': image.getNumber('area').subtract(image.getNumber('noncloud_area'))})
+#     image = image.set({'RelCloudArea': image.getNumber('cloudArea').divide(image.getNumber('area')).multiply(100)})
+#     return image
 
 # NDVI function
 def add_NDVI(image):
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
-    ndvi02 = ndvi.gte(0.2)
-    ndviImg = image.addBands(ndvi).updateMask(ndvi02)
-    ndvi02_area = ndvi02.multiply(ee.Image.pixelArea()).rename('ndvi02_area')
+    areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
+    ndvi = ndvi.addbands(areaPixel)
+    # ndvi02 = ndvi.gte(0.2)
+    thres = ndvi.gte(0.2).rename('thres')
+    ndviImg = image.addBands(ndvi).updateMask(thres)
+
+    maskedPixelCount = ndviImg.select('areaPixel').reduceRegion(
+        reducer=ee.Reducer.sum(),
+        geometry=geometry_feature,
+        scale=10,
+        maxPixels=1e29
+    ).get('areaPixel')
+
+    totalPixelCount = ndviImg.unmask().select('areaPixel').reduceRegion(
+        reducer=ee.Reducer.sum(),
+        geometry=geometry_feature,
+        scale=10,
+        maxPixels=1e29
+    ).get('areaPixel')
+
+    cloud_cover_roi = ee.Number(maskedPixelCount).divide(totalPixelCount).multiply(100)
+    image = image.set({'ndviStats': maskedPixelCount})
+    image = image.set({'img_stats': totalPixelCount})
+    image = image.set({'relVegCover': cloud_cover_roi})
+
+    image = image.addBands(ndvi)
+    # thres = ndvi.gte(0.2).rename('thres')  #TODO: low priority: clean up this is the same as on line 60
+    image = image.addBands(thres)
+    # ndvi02_area = ndvi02.multiply(ee.Image.pixelArea()).rename('ndvi02_area')
 
     # calculate ndvi > 0.2 area
-    ndviStats = ndvi02_area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
+    # ndviStats = ndvi02_area.reduceRegion(
+    #     reducer=ee.Reducer.sum(),
+    #     geometry=geometry_feature,
+    #     scale=10,
+    #     maxPixels=1e29
+    # )
 
-    image = image.set(ndviStats)
+    # image = image.set(ndviStats)
 
     # calculate area of AOI
-    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+    # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+    #
+    # # calculate area
+    # img_stats = area.reduceRegion(
+    #     reducer=ee.Reducer.sum(),
+    #     geometry=geometry_feature,
+    #     scale=10,
+    #     maxPixels=1e29
+    # )
+    # image = image.set(img_stats)
 
-    # calculate area
-    img_stats = area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    image = image.set(img_stats)
+    # a = image.getNumber('ndvi02_area').divide(image.getNumber('area')).multiply(100)
+    # b = image.getNumber('ndvi02_area')
 
-    a = image.getNumber('ndvi02_area').divide(image.getNumber('area')).multiply(100)
-    b = image.getNumber('ndvi02_area')
+    # TODO: low priority: refactor! this is clunky and costly in terms of processing and storage. We do not need to have a band with a constant pixel value accross the data set.
+    # rel_cover = image.select('B1').multiply(0).add(a).rename('rel_ndvi')
+    # image = image.addBands(rel_cover)
+    # image = image.addBands(ndvi)
 
-    # TODO: low priority: refactor! this is clunky and costly in terms of processing and storage. We do not need to have a band with a constant pixel value accorss the data set.
-    rel_cover = image.select('B1').multiply(0).add(a).rename('rel_ndvi')
-    image = image.addBands(rel_cover)
-    image = image.addBands(ndvi)
-
-    thres = ndvi.gte(0.2).rename('thres')  #TODO: low priority: clean up this is the same as on line 60
-    image = image.addBands(thres)
-    image = image.addBands(b)
+    # thres = ndvi.gte(0.2).rename('thres')  #TODO: low priority: clean up this is the same as on line 60
+    # image = image.addBands(thres)
+    # image = image.addBands(b)
     return image
 
-def get_veg_stats(image):
-    date = image.get('system:time_start')
-    name = image.get('name')
-
-    ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
-    image = image.addBands(ndvi)
-
-    ndvi02 = ndvi.gte(0.2).rename('ndvi02')
-    image = image.addBands(ndvi02).updateMask(ndvi02)
-
-    NDVIstats = image.select('ndvi02').reduceRegion(
-        reducer=ee.Reducer.count(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    NDVIarea = ee.Number(NDVIstats.get('ndvi02')).multiply(100)
-
-    return ee.Feature(None, {
-        'NDVIarea': NDVIarea,
-        'name': name,
-        'system:time_start': date})
-    # the above is better area stats. so something similar for the overall area in the add_NDVI function
+# def get_veg_stats(image):
+#     date = image.get('system:time_start')
+#     name = image.get('name')
+#
+#     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
+#     image = image.addBands(ndvi)
+#
+#     ndvi02 = ndvi.gte(0.2).rename('ndvi02')
+#     image = image.addBands(ndvi02).updateMask(ndvi02)
+#
+#     NDVIstats = image.select('ndvi02').reduceRegion(
+#         reducer=ee.Reducer.count(),
+#         geometry=geometry_feature,
+#         scale=10,
+#         maxPixels=1e29
+#     )
+#     NDVIarea = ee.Number(NDVIstats.get('ndvi02')).multiply(100)
+#
+#     return ee.Feature(None, {
+#         'NDVIarea': NDVIarea,
+#         'name': name,
+#         'system:time_start': date})
+#     # the above is better area stats. so something similar for the overall area in the add_NDVI function
 
 def add_ee_layer(self, ee_object, vis_params, name):
     """Adds a method for displaying Earth Engine image tiles to folium map."""
@@ -551,10 +578,10 @@ for timeframe in timeframes:
                 'Focus on areas under maintenance (parks, roads)'
             ]
 
-    project_area = ndvi_img_start.getNumber('area').getInfo()
+    project_area = ndvi_img_start.getNumber('img_stats').getInfo()
 
-    vegetation_start = ndvi_img_start.getNumber('ndvi02_area').getInfo()
-    vegetation_end = ndvi_img_end.getNumber('ndvi02_area').getInfo()
+    vegetation_start = ndvi_img_start.getNumber('ndviStats').getInfo()
+    vegetation_end = ndvi_img_end.getNumber('ndviStats').getInfo()
     area_change = vegetation_end - vegetation_start
 
     relative_change = 100 - (vegetation_end/vegetation_start) * 100
