@@ -31,7 +31,7 @@ if len(sys.argv) >= 3:
 logging.basicConfig(filename='KKRS/ndvi-report-mailer.log', level=logging.DEBUG)
 
 if local_test_run:
-    GEOJSON_PATH = 'Diplomatic Quarter.geojson'
+    GEOJSON_PATH = 'KKRS.geojson'
     JSON_FILE_NAME = '..output/data.json'
     SCREENSHOT_SAVE_NAME = f'../output/growth_decline_'
     CREDENTIALS_PATH = '../credentials/credentials.json'
@@ -56,7 +56,7 @@ else:
     PDF_PATH = f'KKRS/output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
 
 
-#ee.Authenticate(quiet=True)
+# authentication
 service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
 credentials = ee.ServiceAccountCredentials(service_account, 'ee-phill-9248b486a4bc.json')
 ee.Initialize(credentials)
@@ -145,18 +145,18 @@ def maskS2clouds(image):
     return image
 
 def get_project_area(image):
-    # made some changes here, pls check
+
     date = image.get('system:time_start')
     name = image.get('name')
 
     # calculate from polygon
-    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
-    project_stats = area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
+    # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+    # project_stats = area.reduceRegion(
+    #     reducer=ee.Reducer.sum(),
+    #     geometry=geometry_feature,
+    #     scale=10,
+    #     maxPixels=1e29
+    # )
     project_area_size = {'area': ee.Number(ee.FeatureCollection(geo_data).first().geometry().area()).getInfo()}
     #project_area_size = ee.Number(project_stats.get('B1')).multiply(100)
 
