@@ -198,30 +198,30 @@ def maskS2clouds(image):
 def add_NDVI(image):
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
     # areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
-    areaPixel = ee.Image.pixelArea().rename('areaPixel')
+    # areaPixel = ndvi.ee.Image.pixelArea().rename('areaPixel')
 
     # ndvi02 = ndvi.gte(0.2)
     thres = ndvi.gte(0.2).rename('thres')
     # ndviImg = ndviImg.addBands(areaPixel)
-    ndviImg = ndvi.addBands(areaPixel).updateMask(thres)
+    ndviImg = ndvi.updateMask(thres)
 
-    maskedPixelCount = ndviImg.select('areaPixel').reduceRegion(
-        reducer=ee.Reducer.sum(),
+    maskedPixelCount = ndviImg.select('ndvi').reduceRegion(
+        reducer=ee.Reducer.count(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29
     ).get('areaPixel')
 
-    totalPixelCount = ndviImg.unmask().select('areaPixel').reduceRegion(
-        reducer=ee.Reducer.sum(),
+    totalPixelCount = ndviImg.unmask().select('ndvi').reduceRegion(
+        reducer=ee.Reducer.count(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29
     ).get('areaPixel')
 
     cloud_cover_roi = ee.Number(maskedPixelCount).divide(totalPixelCount).multiply(100)
-    image = image.set({'ndviStats': maskedPixelCount})
-    image = image.set({'img_stats': totalPixelCount})
+    image = image.set({'ndviStats': maskedPixelCount*100})
+    image = image.set({'img_stats': totalPixelCount*100})
     image = image.set({'relVegCover': cloud_cover_roi})
 
     image = image.addBands(ndvi)
