@@ -210,14 +210,14 @@ def add_NDVI(image):
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29
-    ).get('areaPixel')
+    ).get('ndvi')
 
     totalPixelCount = ndviImg.unmask().select('ndvi').reduceRegion(
         reducer=ee.Reducer.count(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29
-    ).get('areaPixel')
+    ).get('ndvi')
 
     cloud_cover_roi = ee.Number(maskedPixelCount).divide(totalPixelCount).multiply(100)
     image = image.set({'ndviStats': ee.Number(maskedPixelCount).multiply(100)})
