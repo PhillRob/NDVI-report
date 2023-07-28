@@ -582,8 +582,8 @@ for timeframe in timeframes:
 
     project_area = ndvi_img_start.getNumber('img_stats')#.getInfo()
 
-    vegetation_start = ndvi_img_start.getNumber('ndviStats')#.getInfo()
-    vegetation_end = ndvi_img_end.getNumber('ndviStats')#.getInfo()
+    vegetation_start = ndvi_img_start.get('ndviStats')#.getInfo()
+    vegetation_end = ndvi_img_end.get('ndviStats')#.getInfo()
     area_change = vegetation_end - vegetation_start
 
     relative_change = 100 - (vegetation_end/vegetation_start) * 100
@@ -599,12 +599,14 @@ for timeframe in timeframes:
     growth_img = growth_decline_img.updateMask(growth_mask)
     decline_img = growth_decline_img.updateMask(decline_mask)
     growth_decline_img = growth_decline_img.updateMask(growth_decline_img_mask)
+
     # calculate area
     vegetation_stats_gain = growth_img.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29)
+
     vegetation_gain = ee.Number(vegetation_stats_gain.get('thres')).multiply(100).round().getInfo()
 
     vegetation_loss = area_change - vegetation_gain
