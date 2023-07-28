@@ -220,8 +220,8 @@ def add_NDVI(image):
     ).get('areaPixel')
 
     cloud_cover_roi = ee.Number(maskedPixelCount).divide(totalPixelCount).multiply(100)
-    image = image.set({'ndviStats': maskedPixelCount.multiply(100)})
-    image = image.set({'img_stats': totalPixelCount.multiply(100)})
+    image = image.set({'ndviStats': ee.Number(maskedPixelCount).multiply(100)})
+    image = image.set({'img_stats': ee.Number(totalPixelCount).multiply(100)})
     image = image.set({'relVegCover': cloud_cover_roi})
 
     image = image.addBands(ndvi)
