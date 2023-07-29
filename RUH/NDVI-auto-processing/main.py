@@ -203,16 +203,16 @@ def add_NDVI(image):
     # ndvi02 = ndvi.gte(0.2)
     thres = ndvi.gte(0.2).rename('thres')
     # ndviImg = ndviImg.addBands(areaPixel)
-    ndviImg = ndvi.updateMask(thres)
 
-    maskedPixelCount = ndviImg.select('ndvi').reduceRegion(
+    ndvi = ndvi.updateMask(thres)
+    maskedPixelCount = ndvi.select('ndvi').reduceRegion(
         reducer=ee.Reducer.count(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29
     ).get('ndvi')
 
-    totalPixelCount = ndviImg.unmask().select('ndvi').reduceRegion(
+    totalPixelCount = ndvi.unmask().select('ndvi').reduceRegion(
         reducer=ee.Reducer.count(),
         geometry=geometry_feature,
         scale=10,
