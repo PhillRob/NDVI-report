@@ -582,8 +582,9 @@ for timeframe in timeframes:
 
     project_area = ndvi_img_start.getNumber('img_stats')#.getInfo()
 
-    vegetation_start = ndvi_img_start.get('ndviStats')#.getInfo()
-    vegetation_end = ndvi_img_end.get('ndviStats')#.getInfo()
+    vegetation_start = ee.Number(ndvi_img_start.get('ndviStats'))#.getInfo()
+    vegetation_end = ee.Number(ndvi_img_end.get('ndviStats'))#.getInfo())
+
     area_change = vegetation_end - vegetation_start
 
     relative_change = 100 - (vegetation_end/vegetation_start) * 100
