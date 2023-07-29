@@ -580,12 +580,12 @@ for timeframe in timeframes:
                 'Focus on areas under maintenance (parks, roads)'
             ]
 
-    project_area = ndvi_img_start.getNumber('img_stats')#.getInfo()
+    project_area = ndvi_img_start.getNumber('img_stats').float32()#.getInfo()
 
-    vegetation_start = ee.Number(ndvi_img_start.get('ndviStats'))#.getInfo()
-    vegetation_end = ee.Number(ndvi_img_end.get('ndviStats'))#.getInfo())
+    vegetation_start = ndvi_img_start.getNumber('ndviStats').float32()#.getInfo()
+    vegetation_end = ndvi_img_end.getNumber('ndviStats').float32()#.getInfo())
 
-    area_change = vegetation_end - vegetation_start
+    area_change = (vegetation_end-vegetation_start)
 
     relative_change = 100 - (vegetation_end/vegetation_start) * 100
     vegetation_share_start = (vegetation_start/project_area) * 100
