@@ -581,10 +581,10 @@ for timeframe in timeframes:
             ]
 
     # prepare values for report
-    project_area = ndvi_img_start.getNumber('img_stats').float()#.getInfo()
+    project_area = ndvi_img_start.getNumber('img_stats').getInfo()
 
-    vegetation_start = ndvi_img_start.getNumber('ndviStats').float()#.getInfo()
-    vegetation_end = ndvi_img_end.getNumber('ndviStats').float()#.getInfo())
+    vegetation_start = ndvi_img_start.getNumber('ndviStats').getInfo()
+    vegetation_end = ndvi_img_end.getNumber('ndviStats').getInfo()
 
     area_change = (vegetation_end-vegetation_start)
 
