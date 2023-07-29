@@ -1,10 +1,8 @@
 # !/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
-# import packages
+# packages
 import logging
 import bs4
-# import datetime
 import ee
 import folium
 import json
@@ -18,8 +16,8 @@ from send_email import *
 import sys
 from xhtml2pdf import pisa
 
-
-local_test_run = False
+# test settings
+local_test_run = True
 email_test_run = False
 
 if len(sys.argv) >= 2:
@@ -32,16 +30,18 @@ logging.basicConfig(filename='RUH/ndvi-report-mailer.log', level=logging.DEBUG)
 
 if local_test_run:
     GEOJSON_PATH = 'RUH.geojson'
-    JSON_FILE_NAME = '..output/data.json'
+    JSON_FILE_NAME = 'data.json'
     SCREENSHOT_SAVE_NAME = f'../output/growth_decline_'
     CREDENTIALS_PATH = '../credentials/credentials.json'
     REPORT_HTML = 'report.html'
+    GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
 else:
     GEOJSON_PATH = 'RUH/NDVI-auto-processing/RUH.geojson'
     JSON_FILE_NAME = 'RUH/NDVI-auto-processing/data.json'
     SCREENSHOT_SAVE_NAME = f'RUH/output/growth_decline_'
     CREDENTIALS_PATH = 'RUH/credentials/credentials.json'
     REPORT_HTML = 'KKRS/NDVI-auto-processing/report.html'
+    GEE_CREDENTIALS = 'ee-phill-9248b486a4bc.json'
 
 # variables
 # import AOI and set geometry
@@ -58,7 +58,7 @@ else:
 
 # Authenticate
 service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
-credentials = ee.ServiceAccountCredentials(service_account, 'ee-phill-9248b486a4bc.json')
+credentials = ee.ServiceAccountCredentials(service_account, GEE_CREDENTIALS)
 ee.Initialize(credentials)
 geometry_feature = ee.FeatureCollection(geo_data)
 
@@ -76,11 +76,21 @@ soup.body.append(html_logo)
 # set dates for analysis
 py_date = datetime.utcnow()
 ee_date = ee.Date(py_date)
-# print(ee_date)
 one_year_timedelta = timedelta(days=365)
-five_year_timedelta = timedelta(days=(365*5))
+five_year_timedelta = timedelta(days=(365 * 5))
 start_date = ee.Date(py_date.replace(year=2016, month=7, day=1))
 end_date = ee_date
+
+# Create list of dates for time series to look for more images around the initial date as
+# the AOI is too large to be covered by one tile.
+days_in_interval = 10
+n_months = end_date.difference(start_date,'days').round()
+dates = ee.List.sequence(0, n_months, days_in_interval)
+
+def make_datelist(n):
+    return start_date.advance(n, 'days')
+
+dates = dates.map(make_datelist)
 
 
 timeframes = {
@@ -128,10 +138,8 @@ body_text = {
 }
 
 
-##  Function to mask clouds using the Sentinel-2 QA band param {ee.Image} image Sentinel-2 image @return {ee.Image} cloud masked Sentinel-2 image
-#image = collection.first()
-
 def maskS2clouds(image):
+    # Function to mask clouds using the Sentinel-2 QA band param {ee.Image} image Sentinel-2 image @return {ee.Image} cloud masked Sentinel-2 image
     qa = image.select('QA60')
 
     # Bits 10 and 11 are clouds and cirrus, respectively.
@@ -196,97 +204,36 @@ def maskS2clouds(image):
 
 # NDVI function
 def add_NDVI(image):
+    # for the area we assume the pixels are 10x10m also we know that there is up to 0.01% variance due to the projection used. This can be improved by using areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
-    # areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
-    # areaPixel = ndvi.ee.Image.pixelArea().rename('areaPixel')
-
-    # ndvi02 = ndvi.gte(0.2)
     thres = ndvi.gte(0.2).rename('thres')
-    # ndviImg = ndviImg.addBands(areaPixel)
-
-    ndvi = ndvi.updateMask(thres)
-    maskedPixelCount = ndvi.select('ndvi').reduceRegion(
-        reducer=ee.Reducer.count(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    ).get('ndvi')
-
-    totalPixelCount = ndvi.unmask().select('ndvi').reduceRegion(
-        reducer=ee.Reducer.count(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    ).get('ndvi')
-
-    cloud_cover_roi = ee.Number(maskedPixelCount).divide(totalPixelCount).multiply(100)
-    image = image.set({'ndviStats': ee.Number(maskedPixelCount).multiply(100)})
-    image = image.set({'img_stats': ee.Number(totalPixelCount).multiply(100)})
-    image = image.set({'relVegCover': cloud_cover_roi})
-
-    image = image.addBands(ndvi)
-    # thres = ndvi.gte(0.2).rename('thres')  #TODO: low priority: clean up this is the same as on line 60
-    image = image.addBands(thres)
-    # ndvi02_area = ndvi02.multiply(ee.Image.pixelArea()).rename('ndvi02_area')
+    ndvi02_area = thres.multiply(ee.Image.pixelArea()).rename('ndvi02_area')
 
     # calculate ndvi > 0.2 area
-    # ndviStats = ndvi02_area.reduceRegion(
-    #     reducer=ee.Reducer.sum(),
-    #     geometry=geometry_feature,
-    #     scale=10,
-    #     maxPixels=1e29
-    # )
+    ndviStats = ndvi02_area.reduceRegion(
+        reducer=ee.Reducer.sum(),
+        geometry=geometry_feature,
+        scale=10,
+        maxPixels=1e29
+    )
 
-    # image = image.set(ndviStats)
+    image = image.set(ndviStats)
 
     # calculate area of AOI
-    # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
-    #
-    # # calculate area
-    # img_stats = area.reduceRegion(
-    #     reducer=ee.Reducer.sum(),
-    #     geometry=geometry_feature,
-    #     scale=10,
-    #     maxPixels=1e29
-    # )
-    # image = image.set(img_stats)
+    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
 
-    # a = image.getNumber('ndvi02_area').divide(image.getNumber('area')).multiply(100)
-    # b = image.getNumber('ndvi02_area')
+    # calculate area
+    img_stats = area.reduceRegion(
+        reducer=ee.Reducer.sum(),
+        geometry=geometry_feature,
+        scale=10,
+        maxPixels=1e29
+    )
 
-    # TODO: low priority: refactor! this is clunky and costly in terms of processing and storage. We do not need to have a band with a constant pixel value accross the data set.
-    # rel_cover = image.select('B1').multiply(0).add(a).rename('rel_ndvi')
-    # image = image.addBands(rel_cover)
-    # image = image.addBands(ndvi)
-
-    # thres = ndvi.gte(0.2).rename('thres')  #TODO: low priority: clean up this is the same as on line 60
-    # image = image.addBands(thres)
-    # image = image.addBands(b)
+    image = image.set(img_stats)
+    image = image.addBands(thres)
     return image
 
-# def get_veg_stats(image):
-#     date = image.get('system:time_start')
-#     name = image.get('name')
-#
-#     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
-#     image = image.addBands(ndvi)
-#
-#     ndvi02 = ndvi.gte(0.2).rename('ndvi02')
-#     image = image.addBands(ndvi02).updateMask(ndvi02)
-#
-#     NDVIstats = image.select('ndvi02').reduceRegion(
-#         reducer=ee.Reducer.count(),
-#         geometry=geometry_feature,
-#         scale=10,
-#         maxPixels=1e29
-#     )
-#     NDVIarea = ee.Number(NDVIstats.get('ndvi02')).multiply(100)
-#
-#     return ee.Feature(None, {
-#         'NDVIarea': NDVIarea,
-#         'name': name,
-#         'system:time_start': date})
-#     # the above is better area stats. so something similar for the overall area in the add_NDVI function
 
 def add_ee_layer(self, ee_object, vis_params, name):
     """Adds a method for displaying Earth Engine image tiles to folium map."""
@@ -509,27 +456,43 @@ basemaps = {
     )
 }
 
-#### this is the action script
-### get collection
-# download image collection for the whole range of dates
-collection = (ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
-              .filterDate(start_date, end_date)
-              .filterBounds(geometry_feature)
-              .map(lambda image: image.clip(geometry_feature))
-              ##.map(get_project_size)
-              .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 1))
-              )
+## Mosaic function
+days_in_interval = 10
+def CreateMosaic(d1):
+    start = ee.Date(d1)
+    end = ee.Date(d1).advance(days_in_interval, 'days')
+    date_range = ee.DateRange(start, end)
+    name = start.format('YYYY-MM-dd').cat(' to ').cat(end.format('YYYY-MM-dd'))
+
+    ic = (ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
+        .filterDate(date_range)
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 1))
+        .filterBounds(geometry_feature)
+        # .map(maskS2clouds)
+        .map(lambda image: image.clip(geometry_feature))
+        # .map(add_NDVI)
+        .mosaic())
+        # .qualityMosaic('thres')
+
+    return ic.set(
+        "system:time_start", start.millis(),
+        "system:id", start.format("YYYY-MM-dd"),
+        "name", name,
+        "range", date_range)
 
 # select images from collection
 # TODO: filter for cloud cover
 # collection = cloud_mask_collection.filter(
 #     ee.Filter.lt('RelCloudArea', 3)
 # )
+
+
 ### calculate NDVI
+collection = ee.ImageCollection(dates.map(CreateMosaic))
 ndvi_collection = collection.map(add_NDVI)
+
+
 ### maps and report
-
-
 image_list = []
 processing_date = py_date.strftime('%d.%m.%Y')
 with open(JSON_FILE_NAME, 'r', encoding='utf-8') as f:
@@ -581,10 +544,10 @@ for timeframe in timeframes:
             ]
 
     # prepare values for report
-    project_area = ndvi_img_start.getNumber('img_stats').getInfo()
+    project_area = ndvi_img_start.getNumber('area').getInfo()
 
-    vegetation_start = ndvi_img_start.getNumber('ndviStats').getInfo()
-    vegetation_end = ndvi_img_end.getNumber('ndviStats').getInfo()
+    vegetation_start = ndvi_img_start.getNumber('ndvi02_area').getInfo()
+    vegetation_end = ndvi_img_end.getNumber('ndvi02_area').getInfo()
 
     area_change = (vegetation_end-vegetation_start)
 
@@ -705,6 +668,7 @@ for timeframe in timeframes:
         html_map = 'map.html'
 
         centroid = ee.Geometry(geometry).centroid().getInfo()['coordinates']
+
         # get coordinates from centroid for folium
         lat, lon = centroid[1], centroid[0]
         my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
@@ -738,6 +702,7 @@ for timeframe in timeframes:
 
 if new_report:
     for timeframe in timeframes:
+
         # if no data for timeframe
         if timeframe not in data[processing_date].keys():
             data[processing_date][timeframe] = {}
@@ -763,10 +728,13 @@ if new_report:
                     data[processing_date][timeframe]['vegetation_loss_relative'] = data[date][timeframe]['vegetation_loss_relative']
                     data[processing_date][timeframe]['path'] = data[date][timeframe]['path']
                     data[processing_date][timeframe]['project_name'] = data[date][timeframe]['project_name']
-    # sort data before genrating report
+
+    # sort data before generating report
     data[processing_date] = {k: data[processing_date][k] for k in list(timeframes.keys())}
+
     with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
     soup = add_data_to_html(soup, data[processing_date], head_text, body_text, processing_date)
     pisa.showLogging()
     convert_html_to_pdf(soup.prettify(), PDF_PATH)
