@@ -580,10 +580,11 @@ for timeframe in timeframes:
                 'Focus on areas under maintenance (parks, roads)'
             ]
 
-    project_area = ndvi_img_start.getNumber('img_stats').float32()#.getInfo()
+    # prepare values for report
+    project_area = ndvi_img_start.getNumber('img_stats').float()#.getInfo()
 
-    vegetation_start = ndvi_img_start.getNumber('ndviStats').float32()#.getInfo()
-    vegetation_end = ndvi_img_end.getNumber('ndviStats').float32()#.getInfo())
+    vegetation_start = ndvi_img_start.getNumber('ndviStats').float()#.getInfo()
+    vegetation_end = ndvi_img_end.getNumber('ndviStats').float()#.getInfo())
 
     area_change = (vegetation_end-vegetation_start)
 
