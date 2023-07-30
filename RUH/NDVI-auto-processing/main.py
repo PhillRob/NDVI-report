@@ -26,7 +26,6 @@ if len(sys.argv) >= 2:
 if len(sys.argv) >= 3:
     email_test_run = int(sys.argv[2])
 
-logging.basicConfig(filename='RUH/ndvi-report-mailer.log', level=logging.DEBUG)
 
 if local_test_run:
     GEOJSON_PATH = 'RUH.geojson'
@@ -35,6 +34,8 @@ if local_test_run:
     CREDENTIALS_PATH = '../credentials/credentials.json'
     REPORT_HTML = 'report.html'
     GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
+    LOGGING = 'ndvi-report-mailer.log'
+    LOGO = '../../bpla-systems.png'
 else:
     GEOJSON_PATH = 'RUH/NDVI-auto-processing/RUH.geojson'
     JSON_FILE_NAME = 'RUH/NDVI-auto-processing/data.json'
@@ -42,8 +43,13 @@ else:
     CREDENTIALS_PATH = 'RUH/credentials/credentials.json'
     REPORT_HTML = 'KKRS/NDVI-auto-processing/report.html'
     GEE_CREDENTIALS = 'ee-phill-9248b486a4bc.json'
+    LOGGING = 'RUH/ndvi-report-mailer.log'
+    LOGO = 'bpla-systems.png'
 
-# variables
+# logging
+logging.basicConfig(filename=LOGGING, level=logging.DEBUG)
+
+
 # import AOI and set geometry
 with open(GEOJSON_PATH) as f:
     geo_data = json.load(f)
@@ -67,7 +73,7 @@ geometry_feature = ee.FeatureCollection(geo_data)
 with open(REPORT_HTML, 'r') as html_text:
     source_html = html_text.read()
 
-logo = Path('bpla-systems.png').resolve()
+logo = Path(LOGO).resolve()
 
 soup = bs4.BeautifulSoup(source_html, features="html5lib")
 html_logo = soup.new_tag('img', src=logo, id="header_content")
@@ -81,9 +87,8 @@ five_year_timedelta = timedelta(days=(365 * 5))
 start_date = ee.Date(py_date.replace(year=2016, month=7, day=1))
 end_date = ee_date
 
-# Create list of dates for time series to look for more images around the initial date as
-# the AOI is too large to be covered by one tile.
-days_in_interval = 10
+# Create list of dates for time series to look for more images around the initial date as the AOI is too large to be covered by one tile.
+days_in_interval = 30
 n_months = end_date.difference(start_date,'days').round()
 dates = ee.List.sequence(0, n_months, days_in_interval)
 
