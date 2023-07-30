@@ -17,7 +17,7 @@ import sys
 from xhtml2pdf import pisa
 
 # test settings
-local_test_run = True
+local_test_run = False
 email_test_run = False
 
 if len(sys.argv) >= 2:
