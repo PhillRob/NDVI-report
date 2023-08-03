@@ -31,8 +31,8 @@ def sendEmail(test, project_data, credentials_path, path_to_pdf):
     fromaddr = credentials['fromaddr']
     # recipients list
     if test:
-        addr = ['g.john@bp-la.com']
-        bcc = ['gilbert.john@outlook.de']
+        addr = ['robeck@bp-la.com']
+        bcc = ['robeck@bp-la.com']
     else:
         addr = credentials['toaddr']
         bcc = credentials['tobcc']

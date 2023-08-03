@@ -31,7 +31,7 @@ if local_test_run:
     GEOJSON_PATH = 'RUH.geojson'
     JSON_FILE_NAME = 'data.json'
     SCREENSHOT_SAVE_NAME = f'../output/growth_decline_'
-    CREDENTIALS_PATH = '../credentials/credentials.json'
+    CREDENTIALS_PATH = 'credentials/credentials.json'
     REPORT_HTML = 'report.html'
     GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
     LOGGING = 'ndvi-report-mailer.log'
@@ -62,7 +62,7 @@ else:
     PDF_PATH = f'RUH/output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
 
 
-# Authenticate
+# Authenticate GEE
 service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
 credentials = ee.ServiceAccountCredentials(service_account, GEE_CREDENTIALS)
 ee.Initialize(credentials)
@@ -88,7 +88,7 @@ start_date = ee.Date(py_date.replace(year=2016, month=7, day=1))
 end_date = ee_date
 
 # Create list of dates for time series to look for more images around the initial date as the AOI is too large to be covered by one tile.
-days_in_interval = 30
+days_in_interval = 40
 n_months = end_date.difference(start_date,'days').round()
 dates = ee.List.sequence(0, n_months, days_in_interval)
 
@@ -462,7 +462,8 @@ basemaps = {
 }
 
 ## Mosaic function
-days_in_interval = 10
+# days_in_interval = 30
+
 def CreateMosaic(d1):
     start = ee.Date(d1)
     end = ee.Date(d1).advance(days_in_interval, 'days')
@@ -561,7 +562,7 @@ for timeframe in timeframes:
     vegetation_share_end = (vegetation_end/project_area) * 100
     vegetation_share_change = vegetation_share_end - vegetation_share_start
 
-    #calculate difference between the two datasets
+    # Calculate difference between the two datasets
     growth_decline_img = ndvi_img_end.subtract(ndvi_img_start).select('thres')
     growth_decline_img_mask = growth_decline_img.neq(0)
     decline_mask = growth_decline_img.eq(-1)
@@ -570,7 +571,7 @@ for timeframe in timeframes:
     decline_img = growth_decline_img.updateMask(decline_mask)
     growth_decline_img = growth_decline_img.updateMask(growth_decline_img_mask)
 
-    # calculate area
+    # Calculate area
     vegetation_stats_gain = growth_img.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry_feature,
