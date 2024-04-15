@@ -7,6 +7,7 @@ import ee
 import folium
 import json
 import os
+from PIL import image
 from pathlib import Path
 from datetime import datetime, timedelta
 import selenium.webdriver
@@ -290,6 +291,11 @@ def add_ee_layer(self, ee_object, vis_params, name):
     except Exception as e:
         print(f"Could not display {name}. Exception: {e}")
 
+def convert_png_to_jpg(img_path):
+    new_image_path = Path(img_path).with_suffix(".jpeg")
+    Image.open(img_path).convert('RGB').save(new_image_path)
+    return new_image_path
+
 def add_data_to_html(soup, data, head_text, body_text, processing_date):
     project_name = data[list(data.keys())[0]]['project_name']
     headline = soup.new_tag('p', id="intro_headline")
@@ -370,7 +376,7 @@ def add_data_to_html(soup, data, head_text, body_text, processing_date):
 
         soup.body.append(ul)
 
-        img = Path(data[timeframe]['path']).resolve()
+        img = convert_png_to_jpeg(Path(data[timeframe]['path']).resolve())
         html_img = soup.new_tag('img', src=img)
         img_formatting = soup.new_tag('div', id="img_format")
         img_formatting.append(html_img)
