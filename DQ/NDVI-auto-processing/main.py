@@ -9,6 +9,7 @@ import ee
 import folium
 import json
 import os
+import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 import selenium.webdriver
@@ -666,6 +667,12 @@ for timeframe in timeframes:
             print(f'No new data for {processing_date}.')
     with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
+    source_file = open(json_file_name, 'rb')
+    # you have to open the destination file in binary mode with 'wb'
+    destination_file = open("../../../../var/www/html/DQdata.json", 'wb')
+    # use the shutil.copyobj() method to copy the contents of source_file to destination_file
+    shutil.copyfileobj(source_file, destination_file)
 
     # Define center of our map
     if new_report:
