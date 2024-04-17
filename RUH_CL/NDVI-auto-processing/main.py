@@ -45,7 +45,7 @@ else:
     GEOJSON_PATH = 'RUH_CL/NDVI-auto-processing/RUH_CL.geojson'
     JSON_FILE_NAME = 'RUH_CL/NDVI-auto-processing/data.json'
     SCREENSHOT_SAVE_NAME = f'RUH_CL/output/growth_decline'
-    CREDENTIALS_PATH = 'RUH_CL/credentials/credentials.json'
+    CREDENTIALS_PATH = 'RUH_CL/NDVI-auto-processing/credentials/credentials.json'
     REPORT_HTML = 'RUH_CL/NDVI-auto-processing/report.html'
     GEE_CREDENTIALS = 'ee-phill-9248b486a4bc.json'
     LOGGING = 'RUH_CL/ndvi-report-mailer.log'
