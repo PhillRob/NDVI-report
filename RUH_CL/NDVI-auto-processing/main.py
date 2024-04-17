@@ -23,8 +23,8 @@ from xhtml2pdf import pisa
 import requests, zipfile, io
 
 # test settings
-local_test_run = True
-email_test_run = True
+local_test_run = False
+email_test_run = False
 
 if len(sys.argv) >= 2:
     # if test run is declared true through the command line we just run local tests
