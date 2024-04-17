@@ -785,7 +785,7 @@ if new_report:
 
     source_file = open(json_file_name, 'rb')
     # you have to open the destination file in binary mode with 'wb'
-    destination_file = open("../../../../var/www/html/DQdata.json", 'wb')
+    destination_file = open("../../../../var/www/html/RUH_CL_data.json", 'wb')
     # use the shutil.copyobj() method to copy the contents of source_file to destination_file
     shutil.copyfileobj(source_file, destination_file)
 
