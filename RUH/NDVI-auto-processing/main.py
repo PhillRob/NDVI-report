@@ -2,10 +2,12 @@
 # -*- coding: UTF-8 -*-
 # packages
 import logging
+import shutil
 import bs4
 import ee
 import folium
 import json
+from PIL import Image
 import os
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -290,6 +292,11 @@ def add_ee_layer(self, ee_object, vis_params, name):
     except Exception as e:
         print(f"Could not display {name}. Exception: {e}")
 
+def convert_png_to_jpg(img_path):
+    new_image_path = Path(img_path).with_suffix(".jpeg")
+    Image.open(img_path).convert('RGB').save(new_image_path)
+    return new_image_path
+
 def add_data_to_html(soup, data, head_text, body_text, processing_date):
     project_name = data[list(data.keys())[0]]['project_name']
     headline = soup.new_tag('p', id="intro_headline")
@@ -370,7 +377,8 @@ def add_data_to_html(soup, data, head_text, body_text, processing_date):
 
         soup.body.append(ul)
 
-        img = Path(data[timeframe]['path']).resolve()
+        # img = Path(data[timeframe]['path']).resolve()
+        img = convert_png_to_jpg(Path(data[timeframe]['path']).resolve())
         html_img = soup.new_tag('img', src=img)
         img_formatting = soup.new_tag('div', id="img_format")
         img_formatting.append(html_img)
@@ -740,6 +748,13 @@ if new_report:
 
     with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
+    source_file = open(json_file_name, 'rb')
+    # you have to open the destination file in binary mode with 'wb'
+    destination_file = open("../../../../var/www/html/RUH_CL_data.json", 'wb')
+    # use the shutil.copyobj() method to copy the contents of source_file to destination_file
+    shutil.copyfileobj(source_file, destination_file)
+
 
     soup = add_data_to_html(soup, data[processing_date], head_text, body_text, processing_date)
     pisa.showLogging()

@@ -624,7 +624,6 @@ for timeframe in timeframes:
     # if there is new data it will set new_report to True
     json_file_name = JSON_FILE_NAME
     screenshot_save_name = f'{SCREENSHOT_SAVE_NAME}_{processing_date}_{timeframe}.png'
-    print(screenshot_save_name)
     with open(json_file_name, 'r', encoding='utf-8')as f:
         data = json.load(f)
         # create initial dict if empty
