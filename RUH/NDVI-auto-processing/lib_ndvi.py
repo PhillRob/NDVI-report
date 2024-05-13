@@ -353,15 +353,6 @@ def GenerateReport(collection, timeframe_delta, geometry_feature, screenshot_sav
         "growth_decline_img": growth_decline_img
     }
 
-def get_coord_list(l):
-    # copy list, so the original remains unmodified
-    if type(l[0][0]) is float:
-        return l
-    tmp = []
-    for i in l:
-        tmp.append(get_coord_list(i))
-    return tmp
-
 def _SaveMap(geo_data, growth_decline_img, screenshot_save_name): 
     coords = list(geojson.utils.coords(geo_data))
     starting_coord = [*coords[0]]
