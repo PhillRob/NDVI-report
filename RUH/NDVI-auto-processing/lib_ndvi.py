@@ -3,6 +3,7 @@ import bs4
 import ee
 import folium
 import json
+import geojson
 import os
 from PIL import Image
 from pathlib import Path
@@ -13,7 +14,8 @@ import time
 from send_email import *
 from xhtml2pdf import pisa
 from definitions import *
-from shutil import copy2
+from shutil import copy
+from pprint import pprint as pp
 
 
 def add_data_to_html(source_html, logo, data, head_text, body_text):
@@ -102,7 +104,7 @@ def add_data_to_html(source_html, logo, data, head_text, body_text):
 
         png = data[timeframe]['path']
         try: 
-            jpeg = convert_png_to_jpg(Path(png).resolve())
+            jpeg = Path(png).with_suffix('.jpeg')
             html_img = soup.new_tag('img', src=jpeg)
         except Exception as e:
             html_img = soup.new_tag('img', src=png)
@@ -216,10 +218,12 @@ def add_ee_layer(self, ee_object, vis_params, name):
         print(f"Could not display {name}. Exception: {e}")
 
 def convert_png_to_jpg(img_path):
+    print(f"Image: {img_path}, size: {os.path.getsize(img_path)}")
     new_image_path = Path(img_path).with_suffix(".jpeg")
     img_copy_path = Path(img_path).with_suffix(".temp.png")
-    copy2(img_path, img_copy_path)
-    Image.open(img_copy_path).convert('RGB').save(new_image_path)
+    copy(img_path, img_copy_path)
+    tmp = Image.open(img_copy_path).convert('RGB')
+    tmp.save(new_image_path)
     os.remove(img_copy_path)
     return new_image_path
 
@@ -349,56 +353,89 @@ def GenerateReport(collection, timeframe_delta, geometry_feature, screenshot_sav
         "growth_decline_img": growth_decline_img
     }
 
-def SaveMap(geometry, growth_decline_img, swapped_coords, screenshot_save_name): 
-        html_map = 'map.html'
+def get_coord_list(l):
+    # copy list, so the original remains unmodified
+    if type(l[0][0]) is float:
+        return l
+    tmp = []
+    for i in l:
+        tmp.append(get_coord_list(i))
+    return tmp
 
-        # Define center of our map
-        centroid = ee.Geometry(geometry).centroid().getInfo()['coordinates']
+def _SaveMap(geo_data, growth_decline_img, screenshot_save_name): 
+    coords = list(geojson.utils.coords(geo_data))
+    starting_coord = [*coords[0]]
+    print(starting_coord)
+    merged_poly =  {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [[[[*i] for i in coords]]]
+        }
+    }
 
-        # get coordinates from centroid for folium
-        lat, lon = centroid[1], centroid[0]
-        my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
-        basemaps['Google Satellite'].add_to(my_map)
+    merged_poly["geometry"]["coordinates"][0][0].append(starting_coord)
 
-        white_polygon = ee.geometry.Geometry(geo_json=geometry)
+    swapped_coords = [[x[1], x[0]] for x in coords]
+    
+    html_map = 'map.html'
 
+    # Define center of our map
+    centroid = ee.Geometry(merged_poly["geometry"]).centroid().getInfo()['coordinates']
+
+    # get coordinates from centroid for folium
+    lat, lon = centroid[1], centroid[0]
+    my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
+    basemaps['Google Satellite'].add_to(my_map)
+
+    for feature in geo_data["features"]:
+        white_polygon = ee.geometry.Geometry(geo_json=feature["geometry"])
         my_map.add_ee_layer(white_polygon, geo_vis_params, 'Half opaque polygon')
         my_map.add_ee_layer(growth_decline_img, growth_vis_params, 'Growth and decline image')
 
-        # fit bounds for optimal zoom level
-        my_map.fit_bounds(swapped_coords)
+    # fit bounds for optimal zoom level
+    my_map.fit_bounds(swapped_coords)
 
-        my_map.save(html_map)
+    my_map.save(html_map)
 
-        options = Options()
-        options.add_argument('--headless')
+    options = Options()
+    options.add_argument('--headless')
 
-        driver = selenium.webdriver.Firefox(options=options)
-        driver.set_window_size(1200, 1200)
+    driver = selenium.webdriver.Firefox(options=options)
+    driver.set_window_size(1200, 1200)
 
-        driver.get(f'file:///{os.path.dirname(os.path.abspath("map.html"))}\\map.html')
-        time.sleep(5)
-        screenshot_size = 0
-        success = False
-        while screenshot_size < 15000 and success:
-            if os.path.exists(screenshot_save_name):
-                print("Retrying screenshot")
-                os.remove(screenshot_save_name)
-            success = driver.save_screenshot(screenshot_save_name)
-            screenshot_size = os.path.getsize(screenshot_save_name)
-            print(f"Screenshot saved: {screenshot_save_name}, size: {screenshot_size}")
-        
-        driver.quit()
-        # discard temporary data
-        os.remove(html_map)
+    driver.get(f'file:///{os.path.dirname(os.path.abspath("map.html"))}\\map.html')
+    time.sleep(5)
+    if driver.save_screenshot(screenshot_save_name):
+        print(f"Screenshot successful: {screenshot_save_name}")
+    
+    driver.quit()
+    # discard temporary data
+    os.remove(html_map)
+
+
+def SaveMap(geo_data, growth_decline_img, screenshot_save_name): 
+    success = False
+    while not success:
+        if os.path.exists(screenshot_save_name):
+            print("Retrying screenshot")
+            os.remove(screenshot_save_name)
+        _SaveMap(geo_data, growth_decline_img,  screenshot_save_name)
+        try:
+            jpeg = convert_png_to_jpg(Path(screenshot_save_name).resolve())
+            print(f"jpeg name: {jpeg}")
+            success = True
+        except Exception as e:
+            print(f"Retrying screenshot due to: {e}")
+            success = False
 
 def SaveReport(
         JSON_FILE_NAME, 
         latest_image_date, 
         timeframe_name, 
         res,
-        geometry, 
-        swapped_coords, 
+        geo_data, 
         ):
     new_report = False
     with open(JSON_FILE_NAME, 'r', encoding='utf-8') as f:
@@ -417,9 +454,8 @@ def SaveReport(
             tmp[timeframe_name] = report 
             data[processing_date] = tmp
             SaveMap(
-                geometry, 
+                geo_data, 
                 res["growth_decline_img"],
-                swapped_coords,
                 report["path"]
             )
         else:
@@ -429,7 +465,7 @@ def SaveReport(
     return new_report
 
 def GeneratePdf(data, report, logo_path, source_html_path, pdf_path):
-    print(data)
+    # print(data)
     logo = Path(logo_path).resolve()
     with open(source_html_path, 'r') as html_text:
         source_html = html_text.read()
@@ -468,15 +504,14 @@ def ProcessCollection(
         json_path, 
         screenshot_save_name_base
     ):
-    geometry = geo_data['features'][0]['geometry']
-    swapped_coords = [[x[1], x[0]] for x in geometry['coordinates'][0][0]]
+    name = geo_data["name"]
     geometry_feature = ee.FeatureCollection(geo_data)
     image_list = []
     new_report = False
     _, timeframes = get_timeframes()
     for timeframe_name, timeframe_delta in timeframes.items():
         screenshot_save_name = f'{screenshot_save_name_base}_{processing_date}_{timeframe_name}.png'
-        print(f"Generating report for {timeframe_name} for {geo_data['name']}")
+        print(f"Generating report for {timeframe_name} for {name}")
         res = GenerateReport(
             collection=collection, 
             timeframe_delta=timeframe_delta, 
@@ -503,8 +538,7 @@ def ProcessCollection(
             report["start_date_satellite"], 
             timeframe_name, 
             res,
-            geometry,  
-            swapped_coords
+            geo_data=geo_data,  
             )
         if new_report:
             image_list.append(report["path"])
@@ -536,9 +570,13 @@ def Run(
     collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
 
     ### maps and report
-    with open(json_file_name, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
+    data = {}
+    with open(json_file_name, 'a', encoding='utf-8') as f:
+        try:
+            data = json.load(f)
+        except:
+            pass
+    
     new_report = False
 
     _, report, new_report = ProcessCollection(
@@ -554,7 +592,7 @@ def Run(
     pdf_path.parent.resolve().mkdir(exist_ok=True, parents=True)
 
     # get fresh data
-    with open(json_file_name, 'r', encoding='utf-8') as f:
+    with open(json_file_name, 'a', encoding='utf-8') as f:
         data = json.load(f)
 
     if new_report:

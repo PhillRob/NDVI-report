@@ -15,7 +15,7 @@ def init_ee(email, credentials_file):
 
 # test settings
 
-if __name__ == "__main__":
+def main():
     local_test_run = False
     email_test_run = False
     
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
         LOGGING = 'ndvi-report-mailer.log'
     else:
-        GEE_CREDENTIALS = '../credentials/gee_creds.json'
+        GEE_CREDENTIALS = 'C://Users//mgabo//Documents//NDVI-report//RUH//credentials//gee_creds.json'
         LOGGING = 'mailer.log'
     
     service_account = 'mgaborlajos2@gmail.com'
@@ -42,21 +42,7 @@ if __name__ == "__main__":
     # this is where we'd list our projects - it can be moved to a json if desired
     projects = [
         {
-            'GEOJSON_PATH': 'RUH01.geojson',
-            'JSON_FILE_NAME': 'data01.json',
-            'SCREENSHOT_SAVE_NAME': f'growth_decline_01.png',
-            'REPORT_HTML': 'report.html',
-            'LOGO': 'bpla-systems.png'
-        },
-        {
-            'GEOJSON_PATH': 'RUH02.geojson',
-            'JSON_FILE_NAME': 'data02.json',
-            'SCREENSHOT_SAVE_NAME': f'growth_decline_02.png',
-            'REPORT_HTML': 'report.html',
-            'LOGO': 'bpla-systems.png'
-        },
-        {
-            'GEOJSON_PATH': 'RUH03.geojson',
+            'GEOJSON_PATH': 'trial3.geojson',
             'JSON_FILE_NAME': 'data03.json',
             'SCREENSHOT_SAVE_NAME': f'growth_decline_03.png',
             'REPORT_HTML': 'report.html',
@@ -75,6 +61,8 @@ if __name__ == "__main__":
             email_test_run=email_test_run
         )
 
+if __name__ == "__main__":
+    main()
 # import AOI and set geometry
 # TODO: chart changes changes over time
 # TODO: interactive map in html email
