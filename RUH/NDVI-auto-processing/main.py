@@ -8,9 +8,11 @@ import sys
 from definitions import *
 import lib_ndvi 
 
+
 def init_ee(email, credentials_file):
     credentials = ee.ServiceAccountCredentials(email, credentials_file)
     ee.Initialize(credentials)
+
 
 
 # test settings

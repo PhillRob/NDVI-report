@@ -7,6 +7,8 @@ import bs4
 # import datetime
 import ee
 import folium
+import shutil
+from PIL import Image
 import json
 import os
 from pathlib import Path
@@ -309,6 +311,11 @@ def add_ee_layer(self, ee_object, vis_params, name):
     except Exception as e:
         print(f"Could not display {name}. Exception: {e}")
 
+def convert_png_to_jpg(img_path):
+    new_image_path = Path(img_path).with_suffix(".jpeg")
+    Image.open(img_path).convert('RGB').save(new_image_path)
+    return new_image_path
+
 def add_data_to_html(soup, data, head_text, body_text, processing_date):
     project_name = data[list(data.keys())[0]]['project_name']
     headline = soup.new_tag('p', id="intro_headline")
@@ -389,7 +396,8 @@ def add_data_to_html(soup, data, head_text, body_text, processing_date):
 
         soup.body.append(ul)
 
-        img = Path(data[timeframe]['path']).resolve()
+        # img = Path(data[timeframe]['path']).resolve()
+        img = convert_png_to_jpg(Path(data[timeframe]['path']).resolve())
         html_img = soup.new_tag('img', src=img)
         img_formatting = soup.new_tag('div', id="img_format")
         img_formatting.append(html_img)
@@ -516,6 +524,7 @@ for timeframe in timeframes:
     timeframe_collection = collection.filterDate(timeframes[timeframe]['start_date'], timeframes[timeframe]['end_date'])
     ndvi_timeframe_collection = timeframe_collection.map(add_NDVI)
     ndvi_img_start = ee.Image(ndvi_timeframe_collection.toList(ndvi_timeframe_collection.size()).get(0))
+    # those images contain all bands. we do not need this
     ndvi_img_end = ee.Image(ndvi_timeframe_collection.toList(ndvi_timeframe_collection.size()).get(ndvi_timeframe_collection.size().subtract(1)))
 
     # if there is no different image within that timeframe just take the next best
@@ -551,18 +560,20 @@ for timeframe in timeframes:
                 'Focus on areas under maintenance (parks, roads)'
             ]
 
+    # prepare values for report
     project_area = ndvi_img_start.getNumber('area').getInfo()
 
     vegetation_start = ndvi_img_start.getNumber('ndvi02_area').getInfo()
     vegetation_end = ndvi_img_end.getNumber('ndvi02_area').getInfo()
-    area_change = vegetation_end - vegetation_start
+
+    area_change = (vegetation_end-vegetation_start)
 
     relative_change = 100 - (vegetation_end/vegetation_start) * 100
     vegetation_share_start = (vegetation_start/project_area) * 100
     vegetation_share_end = (vegetation_end/project_area) * 100
     vegetation_share_change = vegetation_share_end - vegetation_share_start
 
-    #calculate difference between the two datasets
+    # Calculate difference between the two datasets
     growth_decline_img = ndvi_img_end.subtract(ndvi_img_start).select('thres')
     growth_decline_img_mask = growth_decline_img.neq(0)
     decline_mask = growth_decline_img.eq(-1)
@@ -570,12 +581,14 @@ for timeframe in timeframes:
     growth_img = growth_decline_img.updateMask(growth_mask)
     decline_img = growth_decline_img.updateMask(decline_mask)
     growth_decline_img = growth_decline_img.updateMask(growth_decline_img_mask)
-    # calculate area
+
+    # Calculate area
     vegetation_stats_gain = growth_img.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29)
+
     vegetation_gain = ee.Number(vegetation_stats_gain.get('thres')).multiply(100).round().getInfo()
 
     vegetation_loss = area_change - vegetation_gain
@@ -672,6 +685,7 @@ for timeframe in timeframes:
         html_map = 'map.html'
 
         centroid = ee.Geometry(geometry).centroid().getInfo()['coordinates']
+
         # get coordinates from centroid for folium
         lat, lon = centroid[1], centroid[0]
         my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
@@ -730,10 +744,19 @@ if new_report:
                     data[processing_date][timeframe]['vegetation_loss_relative'] = data[date][timeframe]['vegetation_loss_relative']
                     data[processing_date][timeframe]['path'] = data[date][timeframe]['path']
                     data[processing_date][timeframe]['project_name'] = data[date][timeframe]['project_name']
-    # sort data before genrating report
+
+    # sort data before generating report
     data[processing_date] = {k: data[processing_date][k] for k in list(timeframes.keys())}
+
     with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
+    source_file = open(json_file_name, 'rb')
+    # you have to open the destination file in binary mode with 'wb'
+    destination_file = open("../../../../var/www/html/KKRS_data.json", 'wb')
+    # use the shutil.copyobj() method to copy the contents of source_file to destination_file
+    shutil.copyfileobj(source_file, destination_file)
+
     soup = add_data_to_html(soup, data[processing_date], head_text, body_text, processing_date)
     pisa.showLogging()
     convert_html_to_pdf(soup.prettify(), PDF_PATH)
@@ -748,6 +771,3 @@ if not local_test_run:
 
 if email_test_run:
     sendEmail(sendtest, open_project_date(JSON_FILE_NAME)[list(data.keys())[-1]], CREDENTIALS_PATH, PDF_PATH)
-
-# TODO: chart changes changes over time
-# TODO: interactive map in html email
