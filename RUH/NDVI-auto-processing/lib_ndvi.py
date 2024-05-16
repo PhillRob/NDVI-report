@@ -660,7 +660,7 @@ def Run(
             collection=collection,
             geo_data=geo_data_base,
             json_file_name=json_file_name,
-            screenshot_save_name_base=screenshot_save_name_base,
+            screenshot_save_name_base=f"{snake_case_name}_{screenshot_save_name_base}",
             credentials_path=credentials_path,
             report_html=report_html,
             logo=logo,

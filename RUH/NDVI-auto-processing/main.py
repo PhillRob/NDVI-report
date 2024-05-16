@@ -46,7 +46,7 @@ def main():
         {
             'GEOJSON_PATH': 'trial3.geojson',
             'JSON_FILE_NAME': 'data03.json',
-            'SCREENSHOT_SAVE_NAME': f'growth_decline_03.png',
+            'SCREENSHOT_SAVE_NAME': f'growth_decline.png',
             'REPORT_HTML': 'report.html',
             'LOGO': 'bpla-systems.png'
         }
