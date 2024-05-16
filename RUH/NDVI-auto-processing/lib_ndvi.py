@@ -422,15 +422,20 @@ def SaveMap(geo_data, growth_decline_img, screenshot_save_name):
             success = False
 
 def SaveReport(
-        JSON_FILE_NAME, 
+        json_file_name, 
         latest_image_date, 
         timeframe_name, 
         res,
         geo_data, 
         ):
     new_report = False
-    with open(JSON_FILE_NAME, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    with open(json_file_name, 'r', encoding='utf-8') as f:
+        data = {}
+        try:
+            data = json.load(f)
+        except:
+            # if the json is unreadable for any reason, it'll be created later anyway
+            pass
         report = res["report"]
         potential_duplicate = None
         if data != {}: 
@@ -451,7 +456,7 @@ def SaveReport(
             )
         else:
             print(f'No new data for {processing_date}.')
-    with open(JSON_FILE_NAME, 'w', encoding='utf-8') as f:
+    with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
     return new_report
 
@@ -548,7 +553,7 @@ def Run(
     local_test_run,
     email_test_run
 ):
-    with open(geojson_path) as f:
+    with open(geojson_path, "r") as f:
         geo_data = json.load(f)
 
     folium.Map.add_ee_layer = add_ee_layer
@@ -583,7 +588,7 @@ def Run(
     pdf_path.parent.resolve().mkdir(exist_ok=True, parents=True)
 
     # get fresh data
-    with open(json_file_name, 'a', encoding='utf-8') as f:
+    with open(json_file_name, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     if new_report:
