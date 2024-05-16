@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import selenium.webdriver
 from selenium.webdriver.firefox.options import Options
 import time
-from send_email import *
+from send_email import sendEmail, open_project_date
 from xhtml2pdf import pisa
 from definitions import *
 from shutil import copy
@@ -412,8 +412,8 @@ def SaveMap(geo_data, growth_decline_img, screenshot_save_name):
         if os.path.exists(screenshot_save_name):
             print("Retrying screenshot")
             os.remove(screenshot_save_name)
-        _SaveMap(geo_data, growth_decline_img,  screenshot_save_name)
         try:
+            _SaveMap(geo_data, growth_decline_img,  screenshot_save_name)
             jpeg = convert_png_to_jpg(Path(screenshot_save_name).resolve())
             print(f"jpeg name: {jpeg}")
             success = True
@@ -542,9 +542,30 @@ def ProcessCollection(
         print(f'timeframe: {timeframe_name} processed')
     return (image_list, report, new_report)
 
+def email(
+        credentials_path, 
+        json_file_name, 
+        new_report, 
+        data, 
+        pdf_path, 
+        local_test_run=False, 
+        email_test_run=False, 
+        send_test=False
+):
+    if credentials_path is None:
+        return 
 
-def Run(
-    geojson_path,
+    project_data = open_project_date(json_file_name)
+    key = list(data.keys())[-1] if email_test_run else processing_date
+    if not local_test_run and new_report:
+        sendEmail(send_test, project_data[key], credentials_path, pdf_path)
+        tmp = "No" if new_report else "New"
+        logging.debug(f'{tmp} new email on {str(datetime.today())}')
+
+
+def ProcessFeature(
+    collection,
+    geo_data,
     json_file_name,
     screenshot_save_name_base,
     credentials_path,
@@ -553,19 +574,6 @@ def Run(
     local_test_run,
     email_test_run
 ):
-    with open(geojson_path, "r") as f:
-        geo_data = json.load(f)
-
-    folium.Map.add_ee_layer = add_ee_layer
-
-    ### calculate NDVI
-    geometry_feature = ee.FeatureCollection(geo_data)
-    n_months, _ = get_timeframes()
-    dates = ee.List.sequence(0, n_months, days_in_interval)
-    dates = dates.map(lambda x: ee.Date(py_date.replace(year=2016, month=7, day=1)).advance(x, 'days'))
-    collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
-
-    ### maps and report
     data = {}
     with open(json_file_name, 'a', encoding='utf-8') as f:
         try:
@@ -601,14 +609,61 @@ def Run(
             )
 
 
-    if credentials_path is None:
-        return 
-    if not local_test_run:
-        if new_report:
-            sendEmail(sendtest, open_project_date(json_file_name)[processing_date], credentials_path, pdf_path)
-            logging.debug(f'New email sent on {str(datetime.today())}')
-        else:
-            logging.debug(f'No new email on {str(datetime.today())}')
+    email(
+        credentials_path=credentials_path,
+        json_file_name=json_file_name,
+        new_report=new_report,
+        data=data,
+        pdf_path=pdf_path,
+        local_test_run=local_test_run,
+        email_test_run=email_test_run,
+    )
 
-    if email_test_run:
-        sendEmail(sendtest, open_project_date(json_file_name)[list(data.keys())[-1]], credentials_path, pdf_path)
+
+def Run(
+    geojson_path,
+    screenshot_save_name_base,
+    credentials_path,
+    report_html,
+    logo,
+    local_test_run,
+    email_test_run
+):
+    with open(geojson_path, "r") as f:
+        geo_data = json.load(f)
+
+    folium.Map.add_ee_layer = add_ee_layer
+
+    ### calculate NDVI
+    geometry_feature = ee.FeatureCollection(geo_data)
+    n_months, _ = get_timeframes()
+    dates = ee.List.sequence(0, n_months, days_in_interval)
+    dates = dates.map(lambda x: ee.Date(py_date.replace(year=2016, month=7, day=1)).advance(x, 'days'))
+    collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
+
+    geo_data_base= {
+        "type": geo_data["type"],
+        "crs": geo_data["crs"],
+        "features": [],
+    }
+        
+    features = geo_data["features"]
+    ### maps and report
+    for feature in features:
+        feature_name = feature["properties"]["REF_CL_CAT"]
+        geo_data_base["features"] = [feature]
+        geo_data_base["name"] = feature_name
+
+        snake_case_name = feature_name.lower().replace(' ', '_')
+        json_file_name = f"{snake_case_name}.json"
+        ProcessFeature(
+            collection=collection,
+            geo_data=geo_data_base,
+            json_file_name=json_file_name,
+            screenshot_save_name_base=screenshot_save_name_base,
+            credentials_path=credentials_path,
+            report_html=report_html,
+            logo=logo,
+            local_test_run=local_test_run,
+            email_test_run=email_test_run
+        )

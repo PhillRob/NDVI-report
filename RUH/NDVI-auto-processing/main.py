@@ -54,7 +54,6 @@ def main():
     for i in projects:    
         lib_ndvi.Run(
             geojson_path=i['GEOJSON_PATH'], 
-            json_file_name=i['JSON_FILE_NAME'], 
             screenshot_save_name_base=i['SCREENSHOT_SAVE_NAME'],
             credentials_path=i.get('CREDENTIALS_PATH'),
             report_html=i['REPORT_HTML'],
