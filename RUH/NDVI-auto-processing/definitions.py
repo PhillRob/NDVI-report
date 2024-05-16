@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 
 def get_processing_time():
-    return datetime.now(tz=timezone.utc)
+    return datetime.now()
 
 
 def get_str_timestamp():
