@@ -1,16 +1,17 @@
 # !/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
-# import packages
+# packages
 import logging
+import shutil
+from functools import reduce
 import bs4
-from PIL import Image
-# import datetime
 import ee
+import copy
 import folium
 import json
 import os
-import shutil
+from PIL import Image
+import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 import selenium.webdriver
@@ -19,8 +20,9 @@ import time
 from send_email import *
 import sys
 from xhtml2pdf import pisa
+import requests, zipfile, io
 
-
+# test settings
 local_test_run = False
 email_test_run = False
 
@@ -30,46 +32,75 @@ if len(sys.argv) >= 2:
 if len(sys.argv) >= 3:
     email_test_run = int(sys.argv[2])
 
-logging.basicConfig(filename='DQ/ndvi-report-mailer.log', level=logging.DEBUG)
-
 if local_test_run:
-    GEOJSON_PATH = 'Diplomatic Quarter.geojson'
-    JSON_FILE_NAME = '..output/data.json'
-    SCREENSHOT_SAVE_NAME = f'../output/growth_decline_'
-    CREDENTIALS_PATH = '../credentials/credentials.json'
+    GEOJSON_PATH = 'RUH_CL.geojson'
+    JSON_FILE_NAME = 'data.json'
+    SCREENSHOT_SAVE_NAME = f'output/growth_decline'
+    CREDENTIALS_PATH = 'credentials/credentials.json'
     REPORT_HTML = 'report.html'
+    GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
+    LOGGING = 'ndvi-report-mailer.log'
+    LOGO = 'bpla-systems.png'
 else:
-    GEOJSON_PATH = 'DQ/NDVI-auto-processing/Diplomatic Quarter.geojson'
-    JSON_FILE_NAME = 'DQ/NDVI-auto-processing/data.json'
-    SCREENSHOT_SAVE_NAME = f'DQ/output/growth_decline_'
-    CREDENTIALS_PATH = 'DQ/credentials/credentials.json'
-    REPORT_HTML = 'DQ/NDVI-auto-processing/report.html'
+    GEOJSON_PATH = 'RUH_CL/NDVI-auto-processing/RUH_CL.geojson'
+    JSON_FILE_NAME = 'RUH_CL/NDVI-auto-processing/data.json'
+    SCREENSHOT_SAVE_NAME = f'RUH_CL/output/growth_decline'
+    CREDENTIALS_PATH = 'RUH_CL/NDVI-auto-processing/credentials/credentials.json'
+    REPORT_HTML = 'RUH_CL/NDVI-auto-processing/report.html'
+    GEE_CREDENTIALS = 'ee-phill-9248b486a4bc.json'
+    LOGGING = 'RUH_CL/ndvi-report-mailer.log'
+    LOGO = 'bpla-systems.png'
 
-# variables
+
+# logging
+logging.basicConfig(filename=LOGGING, level=logging.DEBUG)
+
 # import AOI and set geometry
 with open(GEOJSON_PATH) as f:
     geo_data = json.load(f)
 
-geometry = geo_data['features'][0]['geometry']
+geometry=[]
+for feature in geo_data['features']:
+    geometry.append(feature['geometry']['coordinates'])
+    res = [item for sublist in geometry[0] for item in sublist[0]]
+
+xcoords = []
+ycoords = []
+
+for f in geo_data['features'][0]['geometry']['coordinates']:
+	for coord in f:
+		xcoords.append(coord[0][1])
+		ycoords.append(coord[0][0])
+
+extent = [
+    [min(ycoords), min(xcoords)],
+    [max(ycoords), min(xcoords)],
+    [max(ycoords), max(xcoords)],
+    [min(ycoords), max(xcoords)]
+]
 
 if local_test_run:
-    PDF_PATH = f'../output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
+    PDF_PATH = f'output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
 else:
-    PDF_PATH = f'DQ/output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
+    PDF_PATH = f'RUH_CL/NDVI-auto-processing/output/{datetime.utcnow().strftime("%Y%m%d")}-{geo_data["name"]}-Vegetation-Cover-Report.pdf'
 
-
-#ee.Authenticate(quiet=True)
+# Authenticate GEE
 service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
-credentials = ee.ServiceAccountCredentials(service_account, 'ee-phill-9248b486a4bc.json')
+credentials = ee.ServiceAccountCredentials(service_account, GEE_CREDENTIALS)
 ee.Initialize(credentials)
+
 geometry_feature = ee.FeatureCollection(geo_data)
 
+# extent_feature = copy.deepcopy(geo_data)
+# del(extent_feature['features'][0]['geometry']['coordinates'][0:len(extent_feature['features'][0]['geometry']['coordinates'])])
+# extent_feature['features'][0]['geometry']['coordinates']=[[extent]]
+# extent_feature_ee = ee.FeatureCollection(extent_feature)
 
 # open html for pdf generation
 with open(REPORT_HTML, 'r') as html_text:
     source_html = html_text.read()
 
-logo = Path('bpla-systems.png').resolve()
+logo = Path(LOGO).resolve()
 
 soup = bs4.BeautifulSoup(source_html, features="html5lib")
 html_logo = soup.new_tag('img', src=logo, id="header_content")
@@ -78,11 +109,20 @@ soup.body.append(html_logo)
 # set dates for analysis
 py_date = datetime.utcnow()
 ee_date = ee.Date(py_date)
-# print(ee_date)
 one_year_timedelta = timedelta(days=365)
-five_year_timedelta = timedelta(days=(365*5))
+five_year_timedelta = timedelta(days=(365 * 5))
 start_date = ee.Date(py_date.replace(year=2016, month=7, day=1))
 end_date = ee_date
+
+# Create list of dates for time series to look for more images around the initial date as the AOI is too large to be covered by one tile.
+days_in_interval = 40
+n_months = end_date.difference(start_date,'days').round()
+dates = ee.List.sequence(0, n_months, days_in_interval)
+
+def make_datelist(n):
+    return start_date.advance(n, 'days')
+
+dates = dates.map(make_datelist)
 
 
 timeframes = {
@@ -130,10 +170,8 @@ body_text = {
 }
 
 
-##  Function to mask clouds using the Sentinel-2 QA band param {ee.Image} image Sentinel-2 image @return {ee.Image} cloud masked Sentinel-2 image
-#image = collection.first()
-
 def maskS2clouds(image):
+    # Function to mask clouds using the Sentinel-2 QA band param {ee.Image} image Sentinel-2 image @return {ee.Image} cloud masked Sentinel-2 image
     qa = image.select('QA60')
 
     # Bits 10 and 11 are clouds and cirrus, respectively.
@@ -146,61 +184,62 @@ def maskS2clouds(image):
     image = image.updateMask(mask)
     return image
 
-def get_project_area(image):
-    # made some changes here, pls check
-    date = image.get('system:time_start')
-    name = image.get('name')
+# def get_project_area(image):
+#     # made some changes here, pls check
+#     date = image.get('system:time_start')
+#     name = image.get('name')
+#
+#     # calculate from polygon
+#     # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+#     # project_stats = area.reduceRegion(
+#     #     reducer=ee.Reducer.sum(),
+#     #     geometry=geometry_feature,
+#     #     scale=10,
+#     #     maxPixels=1e29
+#     # )
+#     project_area_size = {'area': ee.Number(ee.FeatureCollection(geo_data).first().geometry().area()).getInfo()}
+#
+#     return ee.Feature(None, {
+#         'project_area_size': project_area_size,
+#         'name': name,
+#         'system:time_start': date
+#         }
+#     )
 
-    # calculate from polygon
-    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
-    project_stats = area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    project_area_size = {'area': ee.Number(ee.FeatureCollection(geo_data).first().geometry().area()).getInfo()}
-    #project_area_size = ee.Number(project_stats.get('B1')).multiply(100)
-
-    return ee.Feature(None, {
-        'project_area_size': project_area_size,
-        'name': name,
-        'system:time_start': date
-        }
-    )
-
-def get_project_size(image):
-    area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
-    project_stats = area.reduceRegion(
-        reducer = ee.Reducer.sum(),
-        geometry = geometry_feature,
-        scale = 10,
-        maxPixels = 1e29
-    )
-    project_stats = {'area': project_stats.get('area')}
-    image = image.set(project_stats)
-    return image
+# def get_project_size(image):
+#
+#     # area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('area')
+#     project_stats = image.unmask().select('B4').reduceRegion(
+#         reducer=ee.Reducer.count(),
+#         geometry=geometry_feature,
+#         scale=10,
+#         maxPixels=1e59
+#     ).get('B4')
+#
+#     # project_stats = {'area': project_stats.get('area')}
+#     image = image.set({'area': project_stats.get('area')})
+#     return image
 
 
-def get_cloud_stats(image):
-    noncloud_area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('noncloud_area')
-    cloud_stats = noncloud_area.reduceRegion(
-        reducer=ee.Reducer.sum(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    image = image.set({'noncloud_area': cloud_stats.get('noncloud_area')})
-    image = image.set({'cloudArea': image.getNumber('area').subtract(image.getNumber('noncloud_area'))})
-    image = image.set({'RelCloudArea': image.getNumber('cloudArea').divide(image.getNumber('area')).multiply(100)})
-    return image
+# def get_cloud_stats(image):
+#     noncloud_area = image.select('B1').multiply(0).add(1).multiply(ee.Image.pixelArea()).rename('noncloud_area')
+#     cloud_stats = noncloud_area.reduceRegion(
+#         reducer=ee.Reducer.sum(),
+#         geometry=geometry_feature,
+#         scale=10,
+#         maxPixels=1e29
+#     )
+#     image = image.set({'noncloud_area': cloud_stats.get('noncloud_area')})
+#     image = image.set({'cloudArea': image.getNumber('area').subtract(image.getNumber('noncloud_area'))})
+#     image = image.set({'RelCloudArea': image.getNumber('cloudArea').divide(image.getNumber('area')).multiply(100)})
+#     return image
 
 # NDVI function
 def add_NDVI(image):
+    # for the area we assume the pixels are 10x10m also we know that there is up to 0.01% variance due to the projection used. This can be improved by using areaPixel = ndvi.multiply(ee.Image.pixelArea()).rename('area_m2')
     ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
-    ndvi02 = ndvi.gte(0.2)
-    ndviImg = image.addBands(ndvi).updateMask(ndvi02)
-    ndvi02_area = ndvi02.multiply(ee.Image.pixelArea()).rename('ndvi02_area')
+    thres = ndvi.gte(0.2).rename('thres')
+    ndvi02_area = thres.multiply(ee.Image.pixelArea()).rename('ndvi02_area')
 
     # calculate ndvi > 0.2 area
     ndviStats = ndvi02_area.reduceRegion(
@@ -222,44 +261,11 @@ def add_NDVI(image):
         scale=10,
         maxPixels=1e29
     )
+
     image = image.set(img_stats)
-
-    a = image.getNumber('ndvi02_area').divide(image.getNumber('area')).multiply(100)
-    b = image.getNumber('ndvi02_area')
-
-    # TODO: low priority: refactor! this is clunky and costly in terms of processing and storage. We do not need to have a band with a constant pixel value accorss the data set.
-    rel_cover = image.select('B1').multiply(0).add(a).rename('rel_ndvi')
-    image = image.addBands(rel_cover)
-    image = image.addBands(ndvi)
-
-    thres = ndvi.gte(0.2).rename('thres')  #TODO: low priority: clean up this is the same as on line 60
     image = image.addBands(thres)
-    image = image.addBands(b)
     return image
 
-def get_veg_stats(image):
-    date = image.get('system:time_start')
-    name = image.get('name')
-
-    ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
-    image = image.addBands(ndvi)
-
-    ndvi02 = ndvi.gte(0.2).rename('ndvi02')
-    image = image.addBands(ndvi02).updateMask(ndvi02)
-
-    NDVIstats = image.select('ndvi02').reduceRegion(
-        reducer=ee.Reducer.count(),
-        geometry=geometry_feature,
-        scale=10,
-        maxPixels=1e29
-    )
-    NDVIarea = ee.Number(NDVIstats.get('ndvi02')).multiply(100)
-
-    return ee.Feature(None, {
-        'NDVIarea': NDVIarea,
-        'name': name,
-        'system:time_start': date})
-    # the above is better area stats. so something similar for the overall area in the add_NDVI function
 
 def add_ee_layer(self, ee_object, vis_params, name):
     """Adds a method for displaying Earth Engine image tiles to folium map."""
@@ -437,7 +443,7 @@ growth_vis_params = {
 }
 
 geo_vis_params = {
-    'opacity': 0.5,
+    'opacity': 0,
     'palette': ['FFFFFF'],
 }
 
@@ -445,10 +451,8 @@ cloud_vis_params = {
     'palette': ['FFFFFF'],
 }
 
-
 # swap the coordinates because folium takes them the other way around
-swapped_coords = [[x[1], x[0]] for x in geometry['coordinates'][0][0]]
-
+swapped_coords = [[x[1], x[0]] for x in res]
 basemaps = {
     'Google Maps': folium.TileLayer(
         tiles='https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
@@ -488,27 +492,44 @@ basemaps = {
     )
 }
 
-#### this is the action script
-### get collection
-# download image collection for the whole range of dates
-collection = (ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
-              .filterDate(start_date, end_date)
-              .filterBounds(geometry_feature)
-              .map(lambda image: image.clip(geometry_feature))
-              ##.map(get_project_size)
-              .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 1))
-              )
+## Mosaic function
+
+def CreateMosaic(d1):
+    start = ee.Date(d1)
+    end = ee.Date(d1).advance(days_in_interval, 'days')
+    date_range = ee.DateRange(start, end)
+    name = start.format('YYYY-MM-dd').cat(' to ').cat(end.format('YYYY-MM-dd'))
+
+    ic = (ee.ImageCollection('COPERNICUS/S2_HARMONIZED')
+        .filterDate(date_range)
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 1))
+        .filterBounds(geometry_feature)
+        # .select(['B8','B4'])
+        # .map(maskS2clouds)
+        .map(lambda image: image.clip(geometry_feature))
+        # .map(add_NDVI)
+        .mosaic())
+        # .qualityMosaic('thres')
+
+    return ic.set(
+        "system:time_start", start.millis(),
+        "system:id", start.format("YYYY-MM-dd"),
+        "name", name,
+        "range", date_range)
 
 # select images from collection
 # TODO: filter for cloud cover
 # collection = cloud_mask_collection.filter(
 #     ee.Filter.lt('RelCloudArea', 3)
 # )
+
+
 ### calculate NDVI
+collection = ee.ImageCollection(dates.map(CreateMosaic))
 ndvi_collection = collection.map(add_NDVI)
+
+
 ### maps and report
-
-
 image_list = []
 processing_date = py_date.strftime('%d.%m.%Y')
 with open(JSON_FILE_NAME, 'r', encoding='utf-8') as f:
@@ -524,6 +545,8 @@ for timeframe in timeframes:
     timeframe_collection = collection.filterDate(timeframes[timeframe]['start_date'], timeframes[timeframe]['end_date'])
     ndvi_timeframe_collection = timeframe_collection.map(add_NDVI)
     ndvi_img_start = ee.Image(ndvi_timeframe_collection.toList(ndvi_timeframe_collection.size()).get(0))
+
+    # those images contain all bands. we do not need this
     ndvi_img_end = ee.Image(ndvi_timeframe_collection.toList(ndvi_timeframe_collection.size()).get(ndvi_timeframe_collection.size().subtract(1)))
 
     # if there is no different image within that timeframe just take the next best
@@ -559,18 +582,20 @@ for timeframe in timeframes:
                 'Focus on areas under maintenance (parks, roads)'
             ]
 
+    # prepare values for report
     project_area = ndvi_img_start.getNumber('area').getInfo()
 
     vegetation_start = ndvi_img_start.getNumber('ndvi02_area').getInfo()
     vegetation_end = ndvi_img_end.getNumber('ndvi02_area').getInfo()
-    area_change = vegetation_end - vegetation_start
+
+    area_change = (vegetation_end-vegetation_start)
 
     relative_change = 100 - (vegetation_end/vegetation_start) * 100
     vegetation_share_start = (vegetation_start/project_area) * 100
     vegetation_share_end = (vegetation_end/project_area) * 100
     vegetation_share_change = vegetation_share_end - vegetation_share_start
 
-    #calculate difference between the two datasets
+    # Calculate difference between the two datasets
     growth_decline_img = ndvi_img_end.subtract(ndvi_img_start).select('thres')
     growth_decline_img_mask = growth_decline_img.neq(0)
     decline_mask = growth_decline_img.eq(-1)
@@ -578,12 +603,14 @@ for timeframe in timeframes:
     growth_img = growth_decline_img.updateMask(growth_mask)
     decline_img = growth_decline_img.updateMask(decline_mask)
     growth_decline_img = growth_decline_img.updateMask(growth_decline_img_mask)
-    # calculate area
+
+    # Calculate area
     vegetation_stats_gain = growth_img.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry_feature,
         scale=10,
         maxPixels=1e29)
+
     vegetation_gain = ee.Number(vegetation_stats_gain.get('thres')).multiply(100).round().getInfo()
 
     vegetation_loss = area_change - vegetation_gain
@@ -597,7 +624,6 @@ for timeframe in timeframes:
     # if there is new data it will set new_report to True
     json_file_name = JSON_FILE_NAME
     screenshot_save_name = f'{SCREENSHOT_SAVE_NAME}_{processing_date}_{timeframe}.png'
-
     with open(json_file_name, 'r', encoding='utf-8')as f:
         data = json.load(f)
         # create initial dict if empty
@@ -672,21 +698,30 @@ for timeframe in timeframes:
             data[processing_date][timeframe]['project_name'] = geo_data['name']
         else:
             print(f'No new data for {processing_date}.')
+
     with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
+
 
     # Define center of our map
     if new_report:
         html_map = 'map.html'
+        # ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
+        # extent[0][0],extent[1][0],extent[2][0],extent[3][0]
+        # (x0, y0) = ((b2 - b1) / (a1 - a2), a2 * (b2 - b1) / (a1 - a2) + b2)
+        lon, lat  = (np.average((extent[0][0],extent[1][0],extent[2][0],extent[3][0])), np.average((extent[0][1],extent[1][1],extent[2][1],extent[3][1])))
 
-        centroid = ee.Geometry(geometry).centroid().getInfo()['coordinates']
+        # geometrycentroid = [[x[1], x[0]] for x in geometrycentroid['coordinates'][0][0]]
+        # centroid = ee.Geometry(extent).centroid().getInfo()['coordinates']
+
         # get coordinates from centroid for folium
-        lat, lon = centroid[1], centroid[0]
+        # lat, lon = centroid[0], centroid[1]
         my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
         basemaps['Google Satellite'].add_to(my_map)
 
-        white_polygon = ee.geometry.Geometry(geo_json=geometry)
-
+        # white_polygon = ee.geometry.Geometry(geo_json=geometry)
+        white_polygon = geometry_feature.geometry()
         my_map.add_ee_layer(white_polygon, geo_vis_params, 'Half opaque polygon')
         my_map.add_ee_layer(growth_decline_img, growth_vis_params, 'Growth and decline image')
 
@@ -707,12 +742,14 @@ for timeframe in timeframes:
         time.sleep(3)
         driver.save_screenshot(screenshot_save_name)
         driver.quit()
+
         # discard temporary data
         os.remove(html_map)
     print(f'timeframe: {timeframe} processed')
 
 if new_report:
     for timeframe in timeframes:
+
         # if no data for timeframe
         if timeframe not in data[processing_date].keys():
             data[processing_date][timeframe] = {}
@@ -738,21 +775,22 @@ if new_report:
                     data[processing_date][timeframe]['vegetation_loss_relative'] = data[date][timeframe]['vegetation_loss_relative']
                     data[processing_date][timeframe]['path'] = data[date][timeframe]['path']
                     data[processing_date][timeframe]['project_name'] = data[date][timeframe]['project_name']
-    # sort data before genrating report
+
+    # sort data before generating report
     data[processing_date] = {k: data[processing_date][k] for k in list(timeframes.keys())}
+
     with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
     source_file = open(json_file_name, 'rb')
     # you have to open the destination file in binary mode with 'wb'
-    destination_file = open("../../../../var/www/html/DQdata.json", 'wb')
+    destination_file = open("../../../../var/www/html/RUH_CL_data.json", 'wb')
     # use the shutil.copyobj() method to copy the contents of source_file to destination_file
     shutil.copyfileobj(source_file, destination_file)
 
     soup = add_data_to_html(soup, data[processing_date], head_text, body_text, processing_date)
     pisa.showLogging()
     convert_html_to_pdf(soup.prettify(), PDF_PATH)
-
 
 if not local_test_run:
     if new_report:
@@ -763,4 +801,3 @@ if not local_test_run:
 
 if email_test_run:
     sendEmail(sendtest, open_project_date(JSON_FILE_NAME)[list(data.keys())[-1]], CREDENTIALS_PATH, PDF_PATH)
-
