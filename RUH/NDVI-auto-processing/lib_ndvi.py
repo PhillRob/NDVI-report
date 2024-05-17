@@ -635,30 +635,29 @@ def Run(
     folium.Map.add_ee_layer = add_ee_layer
 
     ### calculate NDVI
-    geometry_feature = ee.FeatureCollection(geo_data)
     n_months, _ = get_timeframes()
     dates = ee.List.sequence(0, n_months, days_in_interval)
     dates = dates.map(lambda x: ee.Date(py_date.replace(year=2016, month=7, day=1)).advance(x, 'days'))
-    collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
 
-    geo_data_base= {
-        "type": geo_data["type"],
-        "crs": geo_data["crs"],
-        "features": [],
-    }
+    geo_data_arr = [
+        {
+            "type": geo_data["type"],
+            "crs": geo_data["crs"],
+            "features": [i],
+            "name": i["properties"]["REF_CL_CAT"]
+        }
+        for i in geo_data["features"]
+    ]
         
-    features = geo_data["features"]
     ### maps and report
-    for feature in features:
-        feature_name = feature["properties"]["REF_CL_CAT"]
-        geo_data_base["features"] = [feature]
-        geo_data_base["name"] = feature_name
-
-        snake_case_name = feature_name.lower().replace(' ', '_')
+    for feature in geo_data_arr:
+        geometry_feature = ee.FeatureCollection(feature)
+        collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
+        snake_case_name = feature["name"].lower().replace(' ', '_')
         json_file_name = f"{snake_case_name}.json"
         ProcessFeature(
             collection=collection,
-            geo_data=geo_data_base,
+            geo_data=feature,
             json_file_name=json_file_name,
             screenshot_save_name_base=f"{snake_case_name}_{screenshot_save_name_base}",
             credentials_path=credentials_path,
