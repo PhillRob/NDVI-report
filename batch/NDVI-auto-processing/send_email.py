@@ -22,8 +22,7 @@ from xhtml2pdf import pisa
 # http = PoolManager(timeout=no_timeout)
 
 # general smtp mailer vars
-sendtest = False
-
+sendtest = True
 
 def sendEmail(test, project_data, credentials_path, path_to_pdf):
     with open(credentials_path) as c:
@@ -65,13 +64,14 @@ def sendEmail(test, project_data, credentials_path, path_to_pdf):
     # Define the image's ID as referenced above
     msgImage.add_header('Content-ID', '<image1>')
     msgRoot.attach(msgImage)
-
+    # path_to_pdf=pdf_path
     with open(path_to_pdf, 'rb') as f:
         pdf_attach = MIMEApplication(f.read(), _subtype='pdf')
+
     pdf_attach.add_header('Content-Disposition', 'attachment', filename=str(path_to_pdf.split('/')[-1]))
     msgRoot.attach(pdf_attach)
-    # For sending the mail, we have to convert the object to a string, and then use the same prodecure as above to send
-    # using the SMTP server.
+
+    # For sending the mail, we have to convert the object to a string, and then use the same prodecure as above to send using the SMTP server.
     server = smtplib.SMTP('smtp.1und1.de', 587)
     server.starttls()
     server.ehlo()

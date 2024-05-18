@@ -1,4 +1,4 @@
-# !/usr/bin/python4
+# !/usr/bin/python3
 # -*- coding: UTF-8 -*-
 # packages
 import logging
@@ -16,7 +16,6 @@ def init_ee(email, credentials_file):
 
 
 # test settings
-
 def main():
     local_test_run = False
     email_test_run = False
@@ -30,33 +29,36 @@ def main():
     
     if local_test_run:
         GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
-        LOGGING = 'ndvi-report-mailer.log'
+        LOGGING = '../../ndvi-report-mailer.log'
     else:
-        GEE_CREDENTIALS = 'C://Users//mgabo//Documents//NDVI-report//RUH//credentials//gee_creds.json'
+        GEE_CREDENTIALS = '../ee-phill-9248b486a4bc.json'
         LOGGING = 'mailer.log'
     
-    service_account = 'mgaborlajos2@gmail.com'
+    service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
     init_ee(service_account, GEE_CREDENTIALS)
     
     # logging
     logging.basicConfig(filename=LOGGING, level=logging.DEBUG)
     
-    # this is where we'd list our projects - it can be moved to a json if desired
+    # this is where we list our projects
     projects = [
         {
             'GEOJSON_PATH': 'trial3.geojson',
             'JSON_FILE_NAME': 'data03.json',
             'SCREENSHOT_SAVE_NAME': f'growth_decline',
             'REPORT_HTML': 'report.html',
-            'LOGO': 'bpla-systems.png'
+            'LOGO': 'bpla-systems.png',
+            'CREDENTIALS_PATH': 'credentials/credentials.json',
+            'OUTPUT_FOLDER': 'output'
         }
     ]
-    for i in projects:    
+    for i in projects:
         lib_ndvi.Run(
             geojson_path=i['GEOJSON_PATH'], 
             screenshot_save_name_base=i['SCREENSHOT_SAVE_NAME'],
             credentials_path=i.get('CREDENTIALS_PATH'),
             report_html=i['REPORT_HTML'],
+            output_folder=i['OUTPUT_FOLDER'],
             logo=i['LOGO'],
             local_test_run=local_test_run,
             email_test_run=email_test_run
@@ -64,6 +66,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# import AOI and set geometry
-# TODO: chart changes changes over time
-# TODO: interactive map in html email

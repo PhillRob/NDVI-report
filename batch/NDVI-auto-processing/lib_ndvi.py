@@ -34,7 +34,7 @@ def add_data_to_html(source_html, logo, data, head_text, body_text):
     date.string = processing_date
     soup.body.append(date)
     version = soup.new_tag('p', **{'class': 'version'})
-    version.string = 'v1.1'
+    version.string = 'v2.0'
     soup.body.append(version)
     dear_all = soup.new_tag('p')
     dear_all.string = 'Dear all,'
@@ -353,7 +353,7 @@ def GenerateReport(collection, timeframe_delta, geometry_feature, screenshot_sav
         "growth_decline_img": growth_decline_img
     }
 
-def _SaveMap(geo_data, growth_decline_img, screenshot_save_name): 
+def _SaveMap(geo_data, growth_decline_img, screenshot_save_name,geo_vis_params,growth_vis_params):
     coords = list(geojson.utils.coords(geo_data))
     starting_coord = [*coords[0]]
     print(starting_coord)
@@ -497,8 +497,9 @@ def GeneratePdf(data, report, logo_path, source_html_path, pdf_path):
 def ProcessCollection(
         collection, 
         geo_data, 
-        json_path, 
-        screenshot_save_name_base
+        json_path,
+        screenshot_save_name_base,
+        output_folder
     ):
     name = geo_data["name"]
     geometry_feature = ee.FeatureCollection(geo_data)
@@ -506,7 +507,7 @@ def ProcessCollection(
     new_report = False
     _, timeframes = get_timeframes()
     for timeframe_name, timeframe_delta in timeframes.items():
-        screenshot_save_name = f'{screenshot_save_name_base}_{processing_date}_{timeframe_name}.png'
+        screenshot_save_name = f'{output_folder}/{screenshot_save_name_base}_{processing_date}_{timeframe_name}.png'
         print(f"Generating report for {timeframe_name} for {name}")
         res = GenerateReport(
             collection=collection, 
@@ -520,7 +521,7 @@ def ProcessCollection(
         latest_image_date = datetime.strptime(report["end_date_satellite"], "%d.%m.%Y")
 
         if timeframe_name == 'two_weeks':
-            week_diff = (latest_image_date - first_image_date).days / 7.0
+            week_diff = round((latest_image_date - first_image_date).days / 7.0)
             htext = f"{week_diff}-weeks" if week_diff > 1 else "One-week"
             btext = f"{week_diff} weeks" if week_diff > 1 else "last week"
             head_text['two_weeks'] = f'Short-term: {htext}'
@@ -570,6 +571,7 @@ def ProcessFeature(
     screenshot_save_name_base,
     credentials_path,
     report_html,
+    output_folder,
     logo,
     local_test_run,
     email_test_run
@@ -587,10 +589,12 @@ def ProcessFeature(
         collection=collection, 
         geo_data=geo_data, 
         json_path=json_file_name,
+        output_folder=output_folder,
         screenshot_save_name_base=screenshot_save_name_base
     )
 
-    pdf_prefix = '..' if local_test_run else 'RUH'
+    pdf_prefix = '..' if local_test_run else ''
+    # geo_data={'name':'Cl'}
     pdf_path = Path(pdf_path_template.format(prefix=pdf_prefix, name=geo_data["name"]))
     
     pdf_path.parent.resolve().mkdir(exist_ok=True, parents=True)
@@ -625,6 +629,7 @@ def Run(
     screenshot_save_name_base,
     credentials_path,
     report_html,
+    output_folder,
     logo,
     local_test_run,
     email_test_run
@@ -662,6 +667,7 @@ def Run(
             screenshot_save_name_base=f"{snake_case_name}_{screenshot_save_name_base}",
             credentials_path=credentials_path,
             report_html=report_html,
+            output_folder=output_folder,
             logo=logo,
             local_test_run=local_test_run,
             email_test_run=email_test_run
