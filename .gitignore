@@ -2,26 +2,31 @@
 /KKRS/NDVI-auto-processing/ndvi-report-mailer.log
 /DQ/NDVI-auto-processing/ndvi-report-mailer.log
 /RUH_CL/NDVI-auto-processing/ndvi-report-mailer.log
+/RUH/NDVI-auto-processing/ndvi-report-mailer.log
 
 /batch/credentials/
 /DQ/credentials/
 /KKRS/credentials/
 /RUH_CL/credentials/
+/RUH/credentials/
 
 /DQ/NDVI-auto-processing/__pycache__/
 /KKRS/NDVI-auto-processing/__pycache__/
 /batch/NDVI-auto-processing/__pycache__/
 /RUH_CL/NDVI-auto-processing/__pycache__/
+/RUH/NDVI-auto-processing/__pycache__/
 
 /DQ/output/
 /KKRS/output/
 /batch/output/
 /RUH_CL/output/
+/RUH/output/
 
 /batch/NDVI-auto-processing/data.json
 /KKSR/NDVI-auto-processing/data.json
 /DQ/NDVI-auto-processing/data.json
 /RUH_CL/NDVI-auto-processing/data.json
+/RUH/NDVI-auto-processing/data.json
 
 /DQ/.idea/
 /ndvi-mailer/
