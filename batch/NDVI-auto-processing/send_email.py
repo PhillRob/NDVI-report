@@ -68,7 +68,7 @@ def sendEmail(test, project_data, credentials_path, path_to_pdf):
     with open(path_to_pdf, 'rb') as f:
         pdf_attach = MIMEApplication(f.read(), _subtype='pdf')
 
-    pdf_attach.add_header('Content-Disposition', 'attachment', filename=str(path_to_pdf.split('/')[-1]))
+    pdf_attach.add_header('Content-Disposition', 'attachment', filename=str(path_to_pdf))#.split('/')))#[-1]))
     msgRoot.attach(pdf_attach)
 
     # For sending the mail, we have to convert the object to a string, and then use the same prodecure as above to send using the SMTP server.

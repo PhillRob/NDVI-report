@@ -353,7 +353,7 @@ def GenerateReport(collection, timeframe_delta, geometry_feature, screenshot_sav
         "growth_decline_img": growth_decline_img
     }
 
-def _SaveMap(geo_data, growth_decline_img, screenshot_save_name,geo_vis_params,growth_vis_params):
+def _SaveMap(geo_data, growth_decline_img, screenshot_save_name):
     coords = list(geojson.utils.coords(geo_data))
     starting_coord = [*coords[0]]
     print(starting_coord)
@@ -379,6 +379,18 @@ def _SaveMap(geo_data, growth_decline_img, screenshot_save_name,geo_vis_params,g
     lat, lon = centroid[1], centroid[0]
     my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
     basemaps['Google Satellite'].add_to(my_map)
+
+    growth_vis_params = {
+        'min': -1,
+        'max': 1,
+        'palette': ['FF0000', '00FF00'],
+    }
+
+    geo_vis_params = {
+        'opacity': 0.3,
+        'width': 0.1,
+        'palette': ['FFFFFF'],
+    }
 
     for feature in geo_data["features"]:
         white_polygon = ee.geometry.Geometry(geo_json=feature["geometry"])
