@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import selenium.webdriver
 from selenium.webdriver.firefox.options import Options
 import time
-from send_email import *
+from send_email import sendEmail, open_project_date
 from xhtml2pdf import pisa
 from definitions import *
 from shutil import copy
@@ -34,7 +34,7 @@ def add_data_to_html(source_html, logo, data, head_text, body_text):
     date.string = processing_date
     soup.body.append(date)
     version = soup.new_tag('p', **{'class': 'version'})
-    version.string = 'v1.1'
+    version.string = 'v2.0'
     soup.body.append(version)
     dear_all = soup.new_tag('p')
     dear_all.string = 'Dear all,'
@@ -353,7 +353,7 @@ def GenerateReport(collection, timeframe_delta, geometry_feature, screenshot_sav
         "growth_decline_img": growth_decline_img
     }
 
-def _SaveMap(geo_data, growth_decline_img, screenshot_save_name): 
+def _SaveMap(geo_data, growth_decline_img, screenshot_save_name):
     coords = list(geojson.utils.coords(geo_data))
     starting_coord = [*coords[0]]
     print(starting_coord)
@@ -379,6 +379,18 @@ def _SaveMap(geo_data, growth_decline_img, screenshot_save_name):
     lat, lon = centroid[1], centroid[0]
     my_map = folium.Map(location=[lat, lon], zoom_control=False, control_scale=True)
     basemaps['Google Satellite'].add_to(my_map)
+
+    growth_vis_params = {
+        'min': -1,
+        'max': 1,
+        'palette': ['FF0000', '00FF00'],
+    }
+
+    geo_vis_params = {
+        'opacity': 0.3,
+        'width': 0.1,
+        'palette': ['FFFFFF'],
+    }
 
     for feature in geo_data["features"]:
         white_polygon = ee.geometry.Geometry(geo_json=feature["geometry"])
@@ -412,8 +424,8 @@ def SaveMap(geo_data, growth_decline_img, screenshot_save_name):
         if os.path.exists(screenshot_save_name):
             print("Retrying screenshot")
             os.remove(screenshot_save_name)
-        _SaveMap(geo_data, growth_decline_img,  screenshot_save_name)
         try:
+            _SaveMap(geo_data, growth_decline_img,  screenshot_save_name)
             jpeg = convert_png_to_jpg(Path(screenshot_save_name).resolve())
             print(f"jpeg name: {jpeg}")
             success = True
@@ -422,15 +434,20 @@ def SaveMap(geo_data, growth_decline_img, screenshot_save_name):
             success = False
 
 def SaveReport(
-        JSON_FILE_NAME, 
+        json_file_name, 
         latest_image_date, 
         timeframe_name, 
         res,
         geo_data, 
         ):
     new_report = False
-    with open(JSON_FILE_NAME, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    with open(json_file_name, 'r', encoding='utf-8') as f:
+        data = {}
+        try:
+            data = json.load(f)
+        except:
+            # if the json is unreadable for any reason, it'll be created later anyway
+            pass
         report = res["report"]
         potential_duplicate = None
         if data != {}: 
@@ -451,7 +468,7 @@ def SaveReport(
             )
         else:
             print(f'No new data for {processing_date}.')
-    with open(JSON_FILE_NAME, 'w', encoding='utf-8') as f:
+    with open(json_file_name, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
     return new_report
 
@@ -492,8 +509,9 @@ def GeneratePdf(data, report, logo_path, source_html_path, pdf_path):
 def ProcessCollection(
         collection, 
         geo_data, 
-        json_path, 
-        screenshot_save_name_base
+        json_path,
+        screenshot_save_name_base,
+        output_folder
     ):
     name = geo_data["name"]
     geometry_feature = ee.FeatureCollection(geo_data)
@@ -501,7 +519,7 @@ def ProcessCollection(
     new_report = False
     _, timeframes = get_timeframes()
     for timeframe_name, timeframe_delta in timeframes.items():
-        screenshot_save_name = f'{screenshot_save_name_base}_{processing_date}_{timeframe_name}.png'
+        screenshot_save_name = f'{output_folder}/{screenshot_save_name_base}_{processing_date}_{timeframe_name}.png'
         print(f"Generating report for {timeframe_name} for {name}")
         res = GenerateReport(
             collection=collection, 
@@ -515,7 +533,7 @@ def ProcessCollection(
         latest_image_date = datetime.strptime(report["end_date_satellite"], "%d.%m.%Y")
 
         if timeframe_name == 'two_weeks':
-            week_diff = (latest_image_date - first_image_date).days / 7.0
+            week_diff = round((latest_image_date - first_image_date).days / 7.0)
             htext = f"{week_diff}-weeks" if week_diff > 1 else "One-week"
             btext = f"{week_diff} weeks" if week_diff > 1 else "last week"
             head_text['two_weeks'] = f'Short-term: {htext}'
@@ -537,30 +555,39 @@ def ProcessCollection(
         print(f'timeframe: {timeframe_name} processed')
     return (image_list, report, new_report)
 
+def email(
+        credentials_path, 
+        json_file_name, 
+        new_report, 
+        data, 
+        pdf_path, 
+        local_test_run=False, 
+        email_test_run=False, 
+        send_test=False
+):
+    if credentials_path is None:
+        return 
 
-def Run(
-    geojson_path,
+    project_data = open_project_date(json_file_name)
+    key = list(data.keys())[-1] if email_test_run else processing_date
+    if not local_test_run and new_report:
+        sendEmail(send_test, project_data[key], credentials_path, pdf_path)
+        tmp = "No" if new_report else "New"
+        logging.debug(f'{tmp} new email on {str(datetime.today())}')
+
+
+def ProcessFeature(
+    collection,
+    geo_data,
     json_file_name,
     screenshot_save_name_base,
     credentials_path,
     report_html,
+    output_folder,
     logo,
     local_test_run,
     email_test_run
 ):
-    with open(geojson_path) as f:
-        geo_data = json.load(f)
-
-    folium.Map.add_ee_layer = add_ee_layer
-
-    ### calculate NDVI
-    geometry_feature = ee.FeatureCollection(geo_data)
-    n_months, _ = get_timeframes()
-    dates = ee.List.sequence(0, n_months, days_in_interval)
-    dates = dates.map(lambda x: ee.Date(py_date.replace(year=2016, month=7, day=1)).advance(x, 'days'))
-    collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
-
-    ### maps and report
     data = {}
     with open(json_file_name, 'a', encoding='utf-8') as f:
         try:
@@ -574,16 +601,18 @@ def Run(
         collection=collection, 
         geo_data=geo_data, 
         json_path=json_file_name,
+        output_folder=output_folder,
         screenshot_save_name_base=screenshot_save_name_base
     )
 
-    pdf_prefix = '..' if local_test_run else 'RUH'
+    pdf_prefix = '..' if local_test_run else ''
+    # geo_data={'name':'Cl'}
     pdf_path = Path(pdf_path_template.format(prefix=pdf_prefix, name=geo_data["name"]))
     
     pdf_path.parent.resolve().mkdir(exist_ok=True, parents=True)
 
     # get fresh data
-    with open(json_file_name, 'a', encoding='utf-8') as f:
+    with open(json_file_name, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     if new_report:
@@ -596,14 +625,62 @@ def Run(
             )
 
 
-    if credentials_path is None:
-        return 
-    if not local_test_run:
-        if new_report:
-            sendEmail(sendtest, open_project_date(json_file_name)[processing_date], credentials_path, pdf_path)
-            logging.debug(f'New email sent on {str(datetime.today())}')
-        else:
-            logging.debug(f'No new email on {str(datetime.today())}')
+    email(
+        credentials_path=credentials_path,
+        json_file_name=json_file_name,
+        new_report=new_report,
+        data=data,
+        pdf_path=pdf_path,
+        local_test_run=local_test_run,
+        email_test_run=email_test_run,
+    )
 
-    if email_test_run:
-        sendEmail(sendtest, open_project_date(json_file_name)[list(data.keys())[-1]], credentials_path, pdf_path)
+
+def Run(
+    geojson_path,
+    screenshot_save_name_base,
+    credentials_path,
+    report_html,
+    output_folder,
+    logo,
+    local_test_run,
+    email_test_run
+):
+    with open(geojson_path, "r") as f:
+        geo_data = json.load(f)
+
+    folium.Map.add_ee_layer = add_ee_layer
+
+    ### calculate NDVI
+    n_months, _ = get_timeframes()
+    dates = ee.List.sequence(0, n_months, days_in_interval)
+    dates = dates.map(lambda x: ee.Date(py_date.replace(year=2016, month=7, day=1)).advance(x, 'days'))
+
+    geo_data_arr = [
+        {
+            "type": geo_data["type"],
+            "crs": geo_data["crs"],
+            "features": [i],
+            "name": i["properties"]["REF_CL_CAT"]
+        }
+        for i in geo_data["features"]
+    ]
+        
+    ### maps and report
+    for feature in geo_data_arr:
+        geometry_feature = ee.FeatureCollection(feature)
+        collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
+        snake_case_name = feature["name"].lower().replace(' ', '_')
+        json_file_name = f"{snake_case_name}.json"
+        ProcessFeature(
+            collection=collection,
+            geo_data=feature,
+            json_file_name=json_file_name,
+            screenshot_save_name_base=f"{snake_case_name}_{screenshot_save_name_base}",
+            credentials_path=credentials_path,
+            report_html=report_html,
+            output_folder=output_folder,
+            logo=logo,
+            local_test_run=local_test_run,
+            email_test_run=email_test_run
+        )

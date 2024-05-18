@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 
 def get_processing_time():
-    return datetime.now(tz=timezone.utc)
+    return datetime.now()
 
 
 def get_str_timestamp():
@@ -81,7 +81,8 @@ growth_vis_params = {
 }
 
 geo_vis_params = {
-    'opacity': 0.5,
+    'opacity': 0.3,
+    'width': 0.1,
     'palette': ['FFFFFF'],
 }
 
@@ -128,5 +129,5 @@ basemaps = {
         control=True
     )
 }
-
-pdf_path_template = '{prefix}/output/' + datetime.now().strftime("%Y%m%d") + '-{name}-Vegetation-Cover-Report.pdf'
+pdf_path_template = 'output/' + datetime.now().strftime("%Y%m%d") + '-{name}-Vegetation-Cover-Report.pdf'
+# pdf_path_template = '{prefix}/output/' + datetime.now().strftime("%Y%m%d") + '-{name}-Vegetation-Cover-Report.pdf'
