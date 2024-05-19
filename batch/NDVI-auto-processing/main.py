@@ -17,6 +17,7 @@ def init_ee(email, credentials_file):
 
 # test settings
 def main():
+    # set those to True and it will use local vars below *
     local_test_run = False
     email_test_run = False
     
@@ -26,21 +27,22 @@ def main():
     if len(sys.argv) >= 3:
         email_test_run = int(sys.argv[2])
     
-    
+    # here are the local vars
     if local_test_run:
         GEE_CREDENTIALS = '../../ee-phill-9248b486a4bc.json'
         LOGGING = '../../ndvi-report-mailer.log'
     else:
         GEE_CREDENTIALS = '../ee-phill-9248b486a4bc.json'
         LOGGING = 'mailer.log'
-    
+
+    # change to personal account
     service_account = 'ndvi-mailer@ee-phill.iam.gserviceaccount.com'
     init_ee(service_account, GEE_CREDENTIALS)
     
     # logging
     logging.basicConfig(filename=LOGGING, level=logging.DEBUG)
     
-    # this is where we list our projects
+    # this is where we list our projects. You need update those path vars to match the local files.
     projects = [
         {
             'GEOJSON_PATH': 'trial3.geojson',

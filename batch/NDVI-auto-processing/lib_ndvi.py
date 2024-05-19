@@ -529,7 +529,7 @@ def ProcessCollection(
             project_name=geo_data["name"]
             )
         report = res["report"]
-        first_image_date =  datetime.strptime(report["start_date_satellite"], "%d.%m.%Y")
+        first_image_date = datetime.strptime(report["start_date_satellite"], "%d.%m.%Y")
         latest_image_date = datetime.strptime(report["end_date_satellite"], "%d.%m.%Y")
 
         if timeframe_name == 'two_weeks':
