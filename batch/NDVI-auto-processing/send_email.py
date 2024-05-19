@@ -21,13 +21,14 @@ from xhtml2pdf import pisa
 # no_timeout = Timeout(connect=None, read=None)
 # http = PoolManager(timeout=no_timeout)
 
-# general smtp mailer vars
+# if you do not want to send as a testmail, set this to True
 sendtest = True
 
 def sendEmail(test, project_data, credentials_path, path_to_pdf):
     with open(credentials_path) as c:
         credentials = json.load(c)
     fromaddr = credentials['fromaddr']
+
     # recipients list
     if test:
         addr = ['robeck@bp-la.com']
