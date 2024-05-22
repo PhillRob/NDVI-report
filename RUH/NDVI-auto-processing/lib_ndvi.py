@@ -623,6 +623,7 @@ def ProcessFeature(
 def Run(
     geojson_path,
     screenshot_save_name_base,
+    json_folder,
     credentials_path,
     report_html,
     logo,
@@ -654,7 +655,7 @@ def Run(
         geometry_feature = ee.FeatureCollection(feature)
         collection = ee.ImageCollection(dates.map(lambda x: CreateMosaic(x, geometry_feature)))
         snake_case_name = feature["name"].lower().replace(' ', '_')
-        json_file_name = f"{snake_case_name}.json"
+        json_file_name = os.path.join(json_folder, f"{snake_case_name}.json")
         ProcessFeature(
             collection=collection,
             geo_data=feature,
